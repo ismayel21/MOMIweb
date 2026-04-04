@@ -1,0 +1,24 @@
+# Archivos de entorno locales — nunca deben entrar al Docker build
+# .env.production SÍ se copia (tiene la config de producción)
+frontend/.env
+frontend/.env.local
+frontend/.env.*.local
+backend/.env
+backend/.env.local
+
+# Dependencias y builds locales (se regeneran en el build)
+frontend/node_modules/
+frontend/dist/
+backend/venv/
+
+# Python cache
+**/__pycache__/
+**/*.pyc
+**/*.pyo
+
+# Base de datos local
+backend/*.db
+backend/data/
+
+# macOS
+.DS_Store
