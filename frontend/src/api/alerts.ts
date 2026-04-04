@@ -5,12 +5,12 @@ export const alertsAPI = {
   getAll: async (patientId?: number): Promise<Alert[]> => {
     const params = patientId ? { patient_id: patientId } : {};
     const response = await api.get<Alert[]>('/alerts', { params });
-    return response.data;
+    return Array.isArray(response.data) ? response.data : [];
   },
- 
+
   getUnacknowledged: async (): Promise<Alert[]> => {
     const response = await api.get<Alert[]>('/alerts/unacknowledged');
-    return response.data;
+    return Array.isArray(response.data) ? response.data : [];
   },
  
   create: async (data: CreateAlertRequest): Promise<Alert> => {

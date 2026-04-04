@@ -29,7 +29,7 @@ export interface UpdateUserRequest {
 export const adminAPI = {
   listUsers: async (): Promise<AdminUser[]> => {
     const res = await api.get<AdminUser[]>('/admin/users');
-    return res.data;
+    return Array.isArray(res.data) ? res.data : [];
   },
 
   createUser: async (data: CreateUserRequest): Promise<AdminUser> => {

@@ -6,6 +6,6 @@ export const eventsAPI = {
     const response = await api.get<SessionEvent[]>('/events', {
       params: { session_id: sessionId },
     });
-    return response.data;
+    return Array.isArray(response.data) ? response.data : [];
   },
 };

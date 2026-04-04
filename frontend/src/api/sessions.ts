@@ -5,7 +5,7 @@ export const sessionsAPI = {
   getAll: async (patientId?: number): Promise<MonitoringSession[]> => {
     const params = patientId ? { patient_id: patientId } : {};
     const response = await api.get<MonitoringSession[]>('/sessions', { params });
-    return response.data;
+    return Array.isArray(response.data) ? response.data : [];
   },
 
   getHistory: async (params: {
@@ -19,7 +19,7 @@ export const sessionsAPI = {
       Object.entries(params).filter(([, v]) => v !== undefined && v !== '')
     );
     const response = await api.get<MonitoringSession[]>('/sessions', { params: clean });
-    return response.data;
+    return Array.isArray(response.data) ? response.data : [];
   },
  
   getById: async (id: number): Promise<MonitoringSession> => {

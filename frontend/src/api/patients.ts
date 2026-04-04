@@ -4,7 +4,7 @@ import type { Patient, CreatePatientRequest } from '@/types/patient';
 export const patientsAPI = {
   getAll: async (): Promise<Patient[]> => {
     const response = await api.get<Patient[]>('/patients');
-    return response.data;
+    return Array.isArray(response.data) ? response.data : [];
   },
  
   getById: async (id: number): Promise<Patient> => {
