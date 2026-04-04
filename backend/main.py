@@ -265,9 +265,17 @@ if DIST_DIR.exists():
         if any(path.startswith(p) for p in api_prefixes):
             return JSONResponse({"detail": "Not found"}, status_code=404)
         # Todo lo demás (rutas de React Router) → index.html
+        # No-cache para que el browser siempre obtenga el index.html más reciente
+        # (que referencia el bundle JS con hash actualizado)
         index = DIST_DIR / "index.html"
         if index.exists():
-            return FileResponse(str(index))
+            return FileResponse(
+                str(index),
+                headers={
+                    "Cache-Control": "no-store, no-cache, must-revalidate",
+                    "Pragma": "no-cache",
+                }
+            )
         return JSONResponse({"detail": "Not found"}, status_code=404)
 
 
