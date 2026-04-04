@@ -3,10 +3,11 @@ MOMI Web Backend — FastAPI Application
 Plataforma de monitoreo prenatal remoto
 """
 
-from fastapi import FastAPI, WebSocket, WebSocketDisconnect, Depends
+from fastapi import FastAPI, WebSocket, WebSocketDisconnect, Depends, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
-from fastapi.responses import FileResponse
+from fastapi.responses import FileResponse, JSONResponse
+from fastapi.exceptions import HTTPException
 from contextlib import asynccontextmanager
 from pathlib import Path
 import logging
@@ -250,11 +251,24 @@ DIST_DIR = Path(__file__).parent.parent / "frontend" / "dist"
 if DIST_DIR.exists():
     app.mount("/assets", StaticFiles(directory=DIST_DIR / "assets"), name="assets")
 
-    @app.get("/{full_path:path}", include_in_schema=False)
-    async def serve_spa(full_path: str):
-        """Sirve index.html para cualquier ruta — permite React Router."""
+    @app.exception_handler(404)
+    async def spa_404_handler(request: Request, exc: HTTPException):
+        """
+        Sirve index.html para rutas de React Router.
+        Las rutas /api/** siguen devolviendo 404 JSON normal.
+        Este handler NO registra rutas en el router, por lo que no
+        interfiere con POST/PUT/DELETE → evita el 405 Method Not Allowed.
+        """
+        path = request.url.path
+        # Rutas de API/sistema → JSON 404 normal
+        api_prefixes = ("/api", "/ws", "/health", "/debug", "/docs", "/redoc", "/openapi.json")
+        if any(path.startswith(p) for p in api_prefixes):
+            return JSONResponse({"detail": "Not found"}, status_code=404)
+        # Todo lo demás (rutas de React Router) → index.html
         index = DIST_DIR / "index.html"
-        return FileResponse(str(index))
+        if index.exists():
+            return FileResponse(str(index))
+        return JSONResponse({"detail": "Not found"}, status_code=404)
 
 
 if __name__ == "__main__":
