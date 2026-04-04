@@ -13,7 +13,12 @@ interface WebSocketContextType {
 
 const WebSocketContext = createContext<WebSocketContextType | undefined>(undefined);
 
-const WS_BASE_URL = import.meta.env.VITE_WS_BASE_URL || 'ws://localhost:8000';
+// En producción usa el mismo dominio con wss://, en dev usa localhost
+const WS_BASE_URL = import.meta.env.VITE_WS_BASE_URL ?? (
+  import.meta.env.DEV
+    ? 'ws://localhost:8000'
+    : `${window.location.protocol === 'https:' ? 'wss' : 'ws'}://${window.location.host}`
+);
 
 export const WebSocketProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const [ws, setWs] = useState<WebSocket | null>(null);
