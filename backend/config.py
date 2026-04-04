@@ -21,8 +21,8 @@ DB_NAME = "momi_db"
 # Para producción con MySQL:
 # DATABASE_URL = f"mysql+pymysql://{DB_USER}:{DB_PASSWORD}@{DB_HOST}:{DB_PORT}/{DB_NAME}"
 
-# Para pruebas locales con SQLite (no requiere MySQL):
-DATABASE_URL = "sqlite:///./momi_test.db"
+# Lee desde variable de entorno (Railway Volume) o usa SQLite local
+DATABASE_URL = os.getenv("DATABASE_URL", "sqlite:///./momi_test.db")
 
 # ═══════════════════════════════════════════════════════════
 # JWT AUTH
