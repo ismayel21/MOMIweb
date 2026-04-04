@@ -172,7 +172,7 @@ async def websocket_calibration(websocket: WebSocket):
 # ROUTES
 # ═══════════════════════════════════════════════════════════
 
-@app.get("/")
+@app.get("/api")
 async def root():
     return {
         "app": "MOMI API",
