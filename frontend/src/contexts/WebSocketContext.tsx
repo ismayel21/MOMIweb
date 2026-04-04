@@ -13,20 +13,11 @@ interface WebSocketContextType {
 
 const WebSocketContext = createContext<WebSocketContextType | undefined>(undefined);
 
-// En producción usa el mismo dominio con wss://, en dev usa localhost.
-// Fuerza wss:// si la página está en https:// para evitar Mixed Content.
-const WS_BASE_URL = (() => {
-  const raw = import.meta.env.VITE_WS_BASE_URL ?? (
-    import.meta.env.DEV
-      ? 'ws://localhost:8000'
-      : `${window.location.protocol === 'https:' ? 'wss' : 'ws'}://${window.location.host}`
-  );
-  // Si la página es HTTPS pero la URL WebSocket es ws://, forzar wss://
-  if (window.location.protocol === 'https:' && raw.startsWith('ws://')) {
-    return raw.replace('ws://', 'wss://');
-  }
-  return raw;
-})();
+// En DEV usa localhost; en PRODUCCIÓN usa el host actual con protocolo correcto.
+// import.meta.env.DEV es false en cualquier build de producción (vite build).
+const WS_BASE_URL: string = import.meta.env.DEV
+  ? (import.meta.env.VITE_WS_BASE_URL || 'ws://localhost:8000')
+  : `${window.location.protocol === 'https:' ? 'wss' : 'ws'}://${window.location.host}`;
 
 export const WebSocketProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const [ws, setWs] = useState<WebSocket | null>(null);
