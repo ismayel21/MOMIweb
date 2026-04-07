@@ -15,5 +15,7 @@ if __name__ == "__main__":
         port=port,
         reload=reload,
         log_level="info",
-        loop="asyncio"
+        loop="asyncio",
+        proxy_headers=True,          # Lee X-Forwarded-Proto del proxy de Railway
+        forwarded_allow_ips="*",     # Confía en los headers del proxy
     )
