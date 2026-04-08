@@ -104,7 +104,7 @@ const Navbar: React.FC = () => {
             onMouseEnter={e => ((e.currentTarget as HTMLButtonElement).style.background = T.sageDark)}
             onMouseLeave={e => ((e.currentTarget as HTMLButtonElement).style.background = T.sage)}
           >
-            Registrarme
+            Solicitar usuario
           </button>
         </div>
 
@@ -120,7 +120,7 @@ const Navbar: React.FC = () => {
           ))}
           <button onClick={() => navigate('/login')} style={{ textAlign: 'left', background: 'none', border: 'none', color: T.textMid, fontSize: 14, cursor: 'pointer' }}>Iniciar sesión</button>
           <button onClick={() => navigate('/login')} style={{ background: T.sage, color: 'white', border: 'none', padding: '10px', borderRadius: 10, fontWeight: 600, cursor: 'pointer' }}>
-            Registrarme como médico
+            Solicitar usuario
           </button>
         </div>
       )}
@@ -184,7 +184,7 @@ const Hero: React.FC = () => {
               onMouseEnter={e => { (e.currentTarget as HTMLButtonElement).style.background = T.sageDark; (e.currentTarget as HTMLButtonElement).style.transform = 'translateY(-1px)'; }}
               onMouseLeave={e => { (e.currentTarget as HTMLButtonElement).style.background = T.sage; (e.currentTarget as HTMLButtonElement).style.transform = 'none'; }}
             >
-              Registrarme como médico
+              Iniciar sesión
               <ArrowRight style={{ width: 16, height: 16 }} />
             </button>
             <button onClick={() => navigate('/login')} style={{
@@ -348,7 +348,7 @@ const ForDoctors: React.FC = () => {
             onMouseEnter={e => ((e.currentTarget as HTMLButtonElement).style.gap = '10px')}
             onMouseLeave={e => ((e.currentTarget as HTMLButtonElement).style.gap = '6px')}
           >
-            Crear mi cuenta como médico <ArrowRight style={{ width: 15, height: 15 }} />
+            Solicitar acceso <ArrowRight style={{ width: 15, height: 15 }} />
           </button>
         </div>
       </div>
@@ -446,7 +446,7 @@ const ForPatients: React.FC = () => (
 
 const HowItWorks: React.FC = () => {
   const steps = [
-    { n: '01', icon: Stethoscope, title: 'El médico se registra', desc: 'Crea tu cuenta en momi.onl. Accedes a tu panel donde aparecerán todas tus pacientes.', color: T.sage, bg: T.sageLight },
+    { n: '01', icon: Stethoscope, title: 'El médico recibe acceso', desc: 'El administrador crea tu cuenta en momi.onl. Accedes a tu panel donde aparecerán todas tus pacientes.', color: T.sage, bg: T.sageLight },
     { n: '02', icon: Smartphone, title: 'La paciente inicia sesión', desc: 'Desde la estación táctil MOMI, la paciente busca su nombre e inicia la sesión.', color: T.blush, bg: T.blushLight },
     { n: '03', icon: Activity, title: 'Monitoreo en tiempo real', desc: 'Los sensores transmiten al instante. El médico recibe alertas automáticas desde su panel.', color: T.lavender, bg: T.lavLight },
   ];
@@ -507,7 +507,7 @@ const CTA: React.FC = () => {
           Empieza a acompañar<br />a tus pacientes hoy.
         </h2>
         <p style={{ fontSize: 15, color: T.textMid, marginBottom: 36, lineHeight: 1.6 }}>
-          Registro gratuito. Tu primera paciente conectada en minutos.
+          Solicita tu acceso. Tu primera paciente conectada en minutos.
         </p>
 
         <div style={{ display: 'flex', gap: 12, justifyContent: 'center', flexWrap: 'wrap' }}>
@@ -520,7 +520,7 @@ const CTA: React.FC = () => {
             onMouseEnter={e => { (e.currentTarget as HTMLButtonElement).style.background = T.sageDark; (e.currentTarget as HTMLButtonElement).style.transform = 'translateY(-1px)'; }}
             onMouseLeave={e => { (e.currentTarget as HTMLButtonElement).style.background = T.sage; (e.currentTarget as HTMLButtonElement).style.transform = 'none'; }}
           >
-            Registrarme como médico <ArrowRight style={{ width: 16, height: 16 }} />
+            Iniciar sesión <ArrowRight style={{ width: 16, height: 16 }} />
           </button>
           <button onClick={() => navigate('/login')} style={{
             background: T.surface, color: T.textMid, border: `1.5px solid ${T.border}`,
