@@ -14,7 +14,7 @@ import threading
 from database import SessionLocal
 from models import SensorReading, SensorType, MonitoringSession, Event
 from realtime.alerts_engine import evaluate_reading
-from realtime.websocket import send_reading_update, send_alert_notification, send_button_event, send_bp_status, send_calibration_update, send_button_event_calibration
+from realtime.websocket import send_reading_update, send_alert_notification, send_button_event, send_bp_status, send_calibration_update, send_button_event_calibration, send_ai_prediction
 from config import MQTT_BROKER, MQTT_PORT, MQTT_USER, MQTT_PASSWORD, MQTT_TOPIC_BASE
 
 logger = logging.getLogger(__name__)
@@ -159,6 +159,20 @@ class MQTTBridge:
                     "estado": estado,
                     "timestamp": datetime.utcnow().isoformat(),
                 }))
+                return
+
+            # ── Predicción IA (hipoxemia materna) ───────────────────────
+            if sensor_key == "ai/prediction":
+                _db3 = SessionLocal()
+                try:
+                    _sess3 = _db3.query(MonitoringSession).filter(
+                        MonitoringSession.is_active == True
+                    ).order_by(MonitoringSession.start_time.desc()).first()
+                    _ai_pid = _sess3.patient_id if _sess3 else 0
+                finally:
+                    _db3.close()
+                logger.info(f"✓ AI prediction: {data.get('class')} (conf {data.get('confidence')})")
+                self._broadcast(send_ai_prediction(_ai_pid, data))
                 return
 
             # ── Datos de sensores ────────────────────────────────────────

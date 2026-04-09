@@ -7,6 +7,7 @@ import { AlertsList } from '@/components/dashboard/AlertsList';
 import { BloodPressurePanel } from '@/components/dashboard/BloodPressurePanel';
 import { OnboardingGuide } from '@/components/dashboard/OnboardingGuide';
 import { AudioControl } from '@/components/dashboard/AudioControl';
+import { AICard } from '@/components/dashboard/AICard';
 import { SensorType } from '@/types/reading';
 import { Activity, LogOut, ClipboardList, Users } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
@@ -115,6 +116,9 @@ export const DashboardPage: React.FC = () => {
           <div className="space-y-6">
             {/* Selector de paciente */}
             <PatientSelector />
+
+            {/* Predictor IA — Hipoxemia materna */}
+            <AICard />
 
             {/* Panel de presión arterial */}
             <BloodPressurePanel />

@@ -232,3 +232,28 @@ async def send_calibration_update(data: dict):
         "data": data
     }
     await manager.broadcast_calibration(message)
+
+
+async def send_ai_prediction(patient_id: int, prediction_data: dict):
+    """
+    Helper para enviar predicción de IA (hipoxemia materna).
+    La Raspberry Pi publica el resultado del predictor cada 5 s,
+    el MQTT bridge lo recibe y lo reenvía aquí.
+
+    prediction_data:
+        class          — "normal" | "pre_hipoxemia" | "hipoxemia"
+        confidence     — 0.0-1.0
+        risk_level     — "low" | "medium" | "high"
+        spo2_trend     — "stable" | "descending" | "critical"
+        spo2_current   — float
+        hr_current     — float | null
+        buffer_fullness— 0.0-1.0
+    """
+    message = {
+        "type": "ai_prediction",
+        "timestamp": datetime.utcnow().isoformat(),
+        "data": prediction_data
+    }
+    await manager.broadcast_to_patient(patient_id, message)
+    # También enviar al canal de calibración para el técnico
+    await manager.broadcast_calibration(message)

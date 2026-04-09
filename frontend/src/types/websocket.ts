@@ -1,7 +1,17 @@
 // src/types/websocket.ts
 export interface WebSocketMessage {
-  type: 'reading' | 'alert' | 'button_event' | 'connection' | 'error' | 'bp_status';
+  type: 'reading' | 'alert' | 'button_event' | 'connection' | 'error' | 'bp_status' | 'ai_prediction';
   data: any;
+}
+
+export interface AIPrediction {
+  class: 'normal' | 'pre_hipoxemia' | 'hipoxemia' | 'unknown';
+  confidence: number;
+  risk_level: 'low' | 'medium' | 'high';
+  spo2_trend: 'stable' | 'descending' | 'critical';
+  spo2_current: number | null;
+  hr_current: number | null;
+  buffer_fullness: number;
 }
 
 export interface ButtonEvent {

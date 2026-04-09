@@ -1,5 +1,5 @@
 import React, { createContext, useContext, useEffect, useState, useCallback } from 'react';
-import type { ReadingUpdate, AlertNotification, ButtonEvent, BPStatusUpdate } from '@/types/websocket';
+import type { ReadingUpdate, AlertNotification, ButtonEvent, BPStatusUpdate, AIPrediction } from '@/types/websocket';
 
 interface WebSocketContextType {
   isConnected: boolean;
@@ -7,6 +7,7 @@ interface WebSocketContextType {
   latestAlert: AlertNotification | null;
   latestButtonEvent: ButtonEvent | null;
   latestBPStatus: BPStatusUpdate | null;
+  latestAIPrediction: AIPrediction | null;
   connect: (patientId: number) => void;
   disconnect: () => void;
 }
@@ -26,6 +27,7 @@ export const WebSocketProvider: React.FC<{ children: React.ReactNode }> = ({ chi
   const [latestAlert, setLatestAlert] = useState<AlertNotification | null>(null);
   const [latestButtonEvent, setLatestButtonEvent] = useState<ButtonEvent | null>(null);
   const [latestBPStatus, setLatestBPStatus] = useState<BPStatusUpdate | null>(null);
+  const [latestAIPrediction, setLatestAIPrediction] = useState<AIPrediction | null>(null);
 
   const connect = useCallback((patientId: number) => {
     if (!patientId || isNaN(patientId)) {
@@ -59,6 +61,8 @@ export const WebSocketProvider: React.FC<{ children: React.ReactNode }> = ({ chi
           setLatestButtonEvent(msg.data as ButtonEvent);
         } else if (msg.type === 'bp_status') {
           setLatestBPStatus(msg.data as BPStatusUpdate);
+        } else if (msg.type === 'ai_prediction') {
+          setLatestAIPrediction(msg.data as AIPrediction);
         }
       } catch (error) {
         console.error('Error parseando mensaje WebSocket:', error);
@@ -100,6 +104,7 @@ export const WebSocketProvider: React.FC<{ children: React.ReactNode }> = ({ chi
     latestAlert,
     latestButtonEvent,
     latestBPStatus,
+    latestAIPrediction,
     connect,
     disconnect,
   };
