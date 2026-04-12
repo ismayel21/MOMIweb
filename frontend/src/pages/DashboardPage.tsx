@@ -69,11 +69,16 @@ export const DashboardPage: React.FC = () => {
       </nav>
 
       {/* Contenido principal */}
-      <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
+      <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-4">
         {user?.role !== 'tecnico' && <OnboardingGuide />}
 
-        {/* ── Fila 1: Vitales + IA (5 cards en 1 fila, 3 cols en pantallas medianas) ── */}
-        <div className="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-5 gap-4 mb-6">
+        {/* ── Barra superior: Selector de paciente (inline) ── */}
+        <div className="mb-4">
+          <PatientSelector />
+        </div>
+
+        {/* ── Fila 1: Vitales + IA (5 cards en 1 fila) ── */}
+        <div className="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-5 gap-4 mb-4">
           <VitalCard
             title="SpO₂ Materno"
             sensorType={SensorType.SPO2}
@@ -109,20 +114,20 @@ export const DashboardPage: React.FC = () => {
           </div>
         </div>
 
-        {/* ── Fila 2: CTG + Sidebar (Selector, BP, Audio) ── */}
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 mb-6">
-          <div className="lg:col-span-2">
+        {/* ── Fila 2: CTG + Audio (mismo nodo) | Sidebar: BP + Alertas ── */}
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
+          {/* Columna izquierda: CTG + Audio Doppler (ambos del nodo cardiotocógrafo) */}
+          <div className="lg:col-span-2 space-y-3">
             <CTGChart />
-          </div>
-          <div className="space-y-4">
-            <PatientSelector />
-            <BloodPressurePanel />
             <AudioControl />
           </div>
-        </div>
 
-        {/* ── Fila 3: Alertas (ancho completo, siempre visible) ── */}
-        <AlertsList />
+          {/* Columna derecha: Presión arterial + Alertas */}
+          <div className="space-y-4">
+            <BloodPressurePanel />
+            <AlertsList />
+          </div>
+        </div>
       </main>
     </div>
   );

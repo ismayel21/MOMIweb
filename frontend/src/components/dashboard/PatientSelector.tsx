@@ -179,39 +179,37 @@ export const PatientSelector: React.FC = () => {
   }
 
   return (
-    <div className="bg-white rounded-xl shadow-md p-6 border border-[#e8e2d9]">
-      <h2 className="text-xl font-bold mb-4" style={{ color: '#2e3440' }}>Seleccionar Paciente</h2>
-
+    <div className="bg-white rounded-xl shadow-md px-4 py-3 border border-[#e8e2d9]">
       {activeSession ? (
-        /* ── SESIÓN ACTIVA ── */
-        <div>
-          <div className="mb-4 p-4 bg-[#e8f2ee] border border-[#b8d9ce] rounded-lg">
-            <p className="font-medium" style={{ color: '#4d7d6c' }}>
-              📡 Monitoreando: {getPatientName(activeSession.patient_id)}
-            </p>
-            <p className="text-sm mt-1" style={{ color: '#6a9e8a' }}>
-              Inicio: {new Date(
+        /* ── SESIÓN ACTIVA — Layout horizontal compacto ── */
+        <div className="flex flex-wrap items-center gap-3">
+          <div className="flex items-center gap-2 flex-1 min-w-0">
+            <span className="w-2 h-2 rounded-full bg-[#4d7d6c] animate-pulse flex-shrink-0" />
+            <span className="font-semibold text-sm truncate" style={{ color: '#4d7d6c' }}>
+              {getPatientName(activeSession.patient_id)}
+            </span>
+            <span className="text-xs hidden sm:inline" style={{ color: '#8e96a3' }}>
+              desde {new Date(
                 activeSession.start_time.endsWith('Z') ? activeSession.start_time : activeSession.start_time + 'Z'
-              ).toLocaleString('es-BO')}
-            </p>
-
-            {/* Temporizador */}
-            <SessionTimer
-              startTime={activeSession.start_time}
-              maxDurationMinutes={maxDurationMinutes}
-            />
+              ).toLocaleTimeString('es-BO', { hour: '2-digit', minute: '2-digit' })}
+            </span>
           </div>
+
+          <SessionTimer
+            startTime={activeSession.start_time}
+            maxDurationMinutes={maxDurationMinutes}
+          />
 
           <button
             type="button"
             onClick={handleEndSession}
             disabled={endSessionMutation.isPending || loadingSummary}
-            className="w-full px-4 py-3 text-white font-semibold rounded-lg
-                       transition-colors
+            className="px-4 py-2 text-white text-sm font-semibold rounded-lg
+                       transition-colors flex-shrink-0
                        disabled:bg-[#e8e2d9] disabled:text-[#8e96a3] disabled:cursor-not-allowed"
             style={{ background: '#c4848c' }}
           >
-            {loadingSummary ? 'Cargando resumen...' : '⏹ Terminar Sesión'}
+            {loadingSummary ? 'Resumen...' : '⏹ Terminar'}
           </button>
 
           {summary && (
@@ -225,14 +223,13 @@ export const PatientSelector: React.FC = () => {
           )}
         </div>
       ) : (
-        /* ── SIN SESIÓN ── */
-        <div>
-          {/* Selector de paciente */}
+        /* ── SIN SESIÓN — Layout horizontal compacto ── */
+        <div className="flex flex-wrap items-center gap-3">
           <select
             value={selectedPatientId || ''}
             onChange={(e) => setSelectedPatientId(Number(e.target.value))}
-            className="w-full px-4 py-3 border border-[#e8e2d9] rounded-lg
-                       focus:ring-2 focus:ring-[#6a9e8a] focus:border-transparent mb-3"
+            className="flex-1 min-w-[180px] px-3 py-2 border border-[#e8e2d9] rounded-lg text-sm
+                       focus:ring-2 focus:ring-[#6a9e8a] focus:border-transparent"
             style={{ color: '#2e3440' }}
           >
             <option value="">-- Seleccionar Paciente --</option>
@@ -243,30 +240,27 @@ export const PatientSelector: React.FC = () => {
             ))}
           </select>
 
-          {/* Duración máxima (opcional) */}
-          <div className="mb-4">
-            <label className="block text-sm mb-1" style={{ color: '#5a6272' }}>
-              Duración máxima{' '}
-              <span style={{ color: '#8e96a3' }}>(minutos, opcional)</span>
-            </label>
+          <div className="flex items-center gap-2">
             <input
               type="number"
               min={1}
               max={480}
               value={maxDurationInput}
               onChange={(e) => setMaxDurationInput(e.target.value)}
-              placeholder="Sin límite"
-              className="w-full px-4 py-2 border border-[#e8e2d9] rounded-lg text-sm
+              placeholder="Min"
+              title="Duración máxima (minutos, opcional)"
+              className="w-20 px-2 py-2 border border-[#e8e2d9] rounded-lg text-sm text-center
                          focus:ring-2 focus:ring-[#6a9e8a] focus:border-transparent"
             />
+            <span className="text-xs hidden sm:inline" style={{ color: '#8e96a3' }}>min</span>
           </div>
 
           <button
             type="button"
             onClick={handleStartSession}
             disabled={!selectedPatientId || startSessionMutation.isPending}
-            className="w-full px-4 py-3 text-white font-semibold rounded-lg
-                       transition-colors
+            className="px-5 py-2 text-white text-sm font-semibold rounded-lg
+                       transition-colors flex-shrink-0
                        disabled:bg-[#e8e2d9] disabled:text-[#8e96a3] disabled:cursor-not-allowed"
             style={{ background: '#6a9e8a' }}
           >
