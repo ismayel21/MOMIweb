@@ -69,67 +69,60 @@ export const DashboardPage: React.FC = () => {
       </nav>
 
       {/* Contenido principal */}
-      <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+      <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
         {user?.role !== 'tecnico' && <OnboardingGuide />}
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-          {/* Columna izquierda */}
-          <div className="lg:col-span-2 space-y-6">
-            {/* Tarjetas de vitales */}
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-              <VitalCard
-                title="SpO2 Materno"
-                sensorType={SensorType.SPO2}
-                valueField="spo2"
-                icon="activity"
-                unit="%"
-                normalRange={[95, 100]}
-              />
-              <VitalCard
-                title="FC Materna"
-                sensorType={SensorType.SPO2}
-                valueField="heart_rate"
-                icon="heart"
-                unit="BPM"
-                normalRange={[60, 100]}
-              />
-              <VitalCard
-                title="Presión Sistólica"
-                sensorType={SensorType.BLOOD_PRESSURE}
-                icon="gauge"
-                unit="mmHg"
-                normalRange={[90, 140]}
-              />
-              <VitalCard
-                title="FC Fetal"
-                sensorType={SensorType.FETAL_DOPPLER}
-                icon="heart"
-                unit="BPM"
-                normalRange={[110, 160]}
-              />
-            </div>
 
-            {/* Gráfica CTG */}
-            <CTGChart />
-          </div>
-
-          {/* Columna derecha */}
-          <div className="space-y-6">
-            {/* Selector de paciente */}
-            <PatientSelector />
-
-            {/* Predictor IA — Hipoxemia materna */}
+        {/* ── Fila 1: Vitales + IA (5 cards en 1 fila, 3 cols en pantallas medianas) ── */}
+        <div className="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-5 gap-4 mb-6">
+          <VitalCard
+            title="SpO₂ Materno"
+            sensorType={SensorType.SPO2}
+            valueField="spo2"
+            icon="activity"
+            unit="%"
+            normalRange={[95, 100]}
+          />
+          <VitalCard
+            title="FC Materna"
+            sensorType={SensorType.SPO2}
+            valueField="heart_rate"
+            icon="heart"
+            unit="BPM"
+            normalRange={[60, 100]}
+          />
+          <VitalCard
+            title="PA Sistólica"
+            sensorType={SensorType.BLOOD_PRESSURE}
+            icon="gauge"
+            unit="mmHg"
+            normalRange={[90, 140]}
+          />
+          <VitalCard
+            title="FC Fetal"
+            sensorType={SensorType.FETAL_DOPPLER}
+            icon="heart"
+            unit="BPM"
+            normalRange={[110, 160]}
+          />
+          <div className="col-span-2 md:col-span-1">
             <AICard />
-
-            {/* Panel de presión arterial */}
-            <BloodPressurePanel />
-
-            {/* Control de volumen audio Doppler */}
-            <AudioControl />
-
-            {/* Alertas */}
-            <AlertsList />
           </div>
         </div>
+
+        {/* ── Fila 2: CTG + Sidebar (Selector, BP, Audio) ── */}
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 mb-6">
+          <div className="lg:col-span-2">
+            <CTGChart />
+          </div>
+          <div className="space-y-4">
+            <PatientSelector />
+            <BloodPressurePanel />
+            <AudioControl />
+          </div>
+        </div>
+
+        {/* ── Fila 3: Alertas (ancho completo, siempre visible) ── */}
+        <AlertsList />
       </main>
     </div>
   );
