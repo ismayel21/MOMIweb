@@ -6,6 +6,7 @@ Escucha topics MQTT y guarda datos automáticamente en la DB
 import paho.mqtt.client as mqtt
 import json
 import logging
+import time
 from datetime import datetime
 from typing import Optional
 import asyncio
@@ -15,6 +16,7 @@ from database import SessionLocal
 from models import SensorReading, SensorType, MonitoringSession, Event
 from realtime.alerts_engine import evaluate_reading
 from realtime.websocket import send_reading_update, send_alert_notification, send_button_event, send_bp_status, send_calibration_update, send_button_event_calibration, send_ai_prediction
+from realtime.ai_predictor import ai_predictor
 from config import MQTT_BROKER, MQTT_PORT, MQTT_USER, MQTT_PASSWORD, MQTT_TOPIC_BASE
 
 logger = logging.getLogger(__name__)
@@ -44,6 +46,9 @@ class MQTTBridge:
         self.is_connected = False
         # Event loop del hilo principal de FastAPI (se asigna en main.py al arrancar)
         self._loop: asyncio.AbstractEventLoop | None = None
+        # Timestamp de la última predicción IA recibida de la Raspi
+        # Si la Raspi está activa (último msg < 30s), el backend no duplica
+        self._raspi_ai_active: float = 0.0
     
     def on_connect(self, client, userdata, flags, rc):
         """Callback cuando se conecta al broker"""
@@ -161,7 +166,7 @@ class MQTTBridge:
                 }))
                 return
 
-            # ── Predicción IA (hipoxemia materna) ───────────────────────
+            # ── Predicción IA desde la Raspi (tiene LSTM, más precisa) ──
             if sensor_key == "ai/prediction":
                 _db3 = SessionLocal()
                 try:
@@ -171,8 +176,11 @@ class MQTTBridge:
                     _ai_pid = _sess3.patient_id if _sess3 else 0
                 finally:
                     _db3.close()
-                logger.info(f"✓ AI prediction: {data.get('class')} (conf {data.get('confidence')})")
+                logger.info(f"✓ AI prediction (raspi): {data.get('class')} (conf {data.get('confidence')})")
                 self._broadcast(send_ai_prediction(_ai_pid, data))
+                # Marcar que la Raspi está enviando predicciones
+                # para que el backend no duplique
+                self._raspi_ai_active = time.time()
                 return
 
             # ── Datos de sensores ────────────────────────────────────────
@@ -225,11 +233,15 @@ class MQTTBridge:
             spo2 = data.get("value")
             if not spo2 or spo2 <= 0:
                 return
+            # Alimentar predictor IA del backend
+            ai_predictor.push_spo2(spo2)
 
         elif sensor_key == "madre/bpm":
             heart_rate = data.get("value")
             if not heart_rate or heart_rate <= 0:
                 return
+            # Alimentar predictor IA del backend
+            ai_predictor.push_hr(heart_rate)
 
         elif sensor_key == "madre/presion_arterial":
             systolic_bp = data.get("sistolica")
@@ -335,6 +347,23 @@ class MQTTBridge:
             if sensor_type.value == "BLOOD_PRESSURE":
                 broadcast_data["interpretacion"] = data.get("interpretacion", "")
             self._broadcast(send_reading_update(patient_id, broadcast_data))
+
+            # ── Predicción IA del backend (cada ~5s si hay datos) ───────
+            # Solo si la Raspi NO está enviando predicciones (evitar duplicados)
+            raspi_recently_active = (time.time() - self._raspi_ai_active) < 30
+            if (sensor_key in ("madre/spo2", "madre/bpm")
+                    and ai_predictor.should_predict()
+                    and not raspi_recently_active):
+                try:
+                    prediction = ai_predictor.predict()
+                    if prediction["class"] != "unknown":
+                        logger.info(
+                            f"✓ AI prediction (backend): {prediction['class']} "
+                            f"(conf {prediction['confidence']})"
+                        )
+                        self._broadcast(send_ai_prediction(patient_id, prediction))
+                except Exception as ai_err:
+                    logger.error(f"Error en predicción IA backend: {ai_err}")
 
         except Exception as e:
             logger.error(f"Error guardando lectura: {e}", exc_info=True)
