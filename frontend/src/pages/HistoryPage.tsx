@@ -8,7 +8,7 @@ import {
 import { format } from 'date-fns';
 import {
   ArrowLeft, Printer, Calendar, User, Clock,
-  Activity, ChevronRight, Filter, FileText,
+  Activity, ChevronRight, Filter, FileText, Zap,
 } from 'lucide-react';
 import { patientsAPI } from '@/api/patients';
 import { sessionsAPI } from '@/api/sessions';
@@ -95,6 +95,20 @@ const SessionDetail: React.FC<SessionDetailProps> = ({
   }
   // Pulsación sin soltar aún
   if (currentPress) btnPairs.push({ startTime: currentPress });
+
+  // Parear eventos EVA (START + STOP) — solo para mostrar tabla de tiempos
+  interface EvaPair { startTime: string; endTime?: string; }
+  const evaPairs: EvaPair[] = [];
+  let currentEvaStart: string | null = null;
+  for (const ev of events) {
+    if (ev.event_type === 'EVA_START') {
+      currentEvaStart = ev.timestamp;
+    } else if (ev.event_type === 'EVA_STOP' && currentEvaStart) {
+      evaPairs.push({ startTime: currentEvaStart, endTime: ev.timestamp });
+      currentEvaStart = null;
+    }
+  }
+  if (currentEvaStart) evaPairs.push({ startTime: currentEvaStart });
 
   return (
     <div>
@@ -220,6 +234,65 @@ const SessionDetail: React.FC<SessionDetailProps> = ({
                 </td>
                 <td className="text-center text-[#8e96a3]">{btnPairs.length}</td>
               </tr>
+              <tr>
+                <td className="py-1.5" style={{ color: '#5a6272' }}>Estimulación vibroacústica (EVA)</td>
+                <td className="text-center font-medium" style={{ color: '#2e3440' }}>
+                  {evaPairs.length > 0
+                    ? `${evaPairs.length} activación${evaPairs.length !== 1 ? 'es' : ''}`
+                    : '—'}
+                </td>
+                <td className="text-center text-[#8e96a3]">{evaPairs.length}</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      )}
+
+      {/* ── Tabla de activaciones EVA ── */}
+      {!isLoading && evaPairs.length > 0 && (
+        <div className="bg-white border border-[#e8e2d9] rounded-xl p-4 mb-4">
+          <div className="flex items-center gap-2 mb-3">
+            <Zap size={15} style={{ color: '#9b8ec4' }} />
+            <span className="font-semibold text-sm" style={{ color: '#5a6272' }}>
+              Estimulación Vibroacústica (EVA) —{' '}
+              {evaPairs.length} activación{evaPairs.length !== 1 ? 'es' : ''}
+            </span>
+          </div>
+          <table className="w-full text-sm">
+            <thead>
+              <tr className="border-b border-[#f0ebe3]" style={{ color: '#8e96a3' }}>
+                <th className="text-left py-1 font-normal w-8">#</th>
+                <th className="text-left py-1 font-normal">Hora de activación</th>
+                <th className="text-left py-1 font-normal">Hora de fin</th>
+                <th className="text-right py-1 font-normal">Duración</th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-[#f4f1ec]">
+              {evaPairs.map((pair, i) => {
+                const durS = pair.endTime
+                  ? Math.round(
+                      (new Date(pair.endTime).getTime() - new Date(pair.startTime).getTime()) / 1000
+                    )
+                  : null;
+                return (
+                  <tr key={i}>
+                    <td className="py-1.5 text-[#8e96a3]">{i + 1}</td>
+                    <td className="py-1.5 font-medium" style={{ color: '#2e3440' }}>
+                      {fmtDateTime(pair.startTime)}
+                    </td>
+                    <td className="py-1.5" style={{ color: '#8e96a3' }}>
+                      {pair.endTime ? fmtDateTime(pair.endTime) : '—'}
+                    </td>
+                    <td className="py-1.5 text-right" style={{ color: '#8e96a3' }}>
+                      {durS != null
+                        ? durS >= 60
+                          ? `${Math.floor(durS / 60)}m ${durS % 60}s`
+                          : `${durS}s`
+                        : '—'}
+                    </td>
+                  </tr>
+                );
+              })}
             </tbody>
           </table>
         </div>

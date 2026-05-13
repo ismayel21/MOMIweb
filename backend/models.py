@@ -84,10 +84,11 @@ class Patient(Base):
 class MonitoringSession(Base):
     """Sesiones de monitoreo continuo"""
     __tablename__ = "monitoring_sessions"
-    
+
     id = Column(Integer, primary_key=True, index=True)
     patient_id = Column(Integer, ForeignKey("patients.id"), nullable=False)
-    
+    session_uuid = Column(String(36), unique=True, nullable=True, index=True)  # UUID del dispositivo
+
     start_time = Column(DateTime, nullable=False, default=datetime.utcnow)
     end_time = Column(DateTime)
     duration_minutes = Column(Integer)

@@ -47,6 +47,7 @@ async def lifespan(app: FastAPI):
     migrations = [
         ("ALTER TABLE doctors ADD COLUMN role VARCHAR(20) DEFAULT 'doctor'",  "role → doctors"),
         ("ALTER TABLE patients ADD COLUMN doctor_id INTEGER REFERENCES doctors(id)", "doctor_id → patients"),
+        ("ALTER TABLE monitoring_sessions ADD COLUMN session_uuid VARCHAR(36)", "session_uuid → monitoring_sessions"),
     ]
     with engine.connect() as conn:
         for sql, label in migrations:
