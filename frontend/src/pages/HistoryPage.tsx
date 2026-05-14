@@ -154,22 +154,6 @@ const SessionDetail: React.FC<SessionDetailProps> = ({
           )}
         </h3>
         <div className="flex items-center gap-2">
-          {session.is_active && (
-            <button
-              type="button"
-              onClick={toggleEva}
-              disabled={evaLoading}
-              className="flex items-center gap-2 px-3 py-2 rounded-lg text-sm font-semibold transition-colors"
-              style={{
-                background: evaEnabled ? '#ede9fe' : '#f3f4f6',
-                color: evaEnabled ? '#7c3aed' : '#6b7280',
-                border: `1px solid ${evaEnabled ? '#c4b5fd' : '#d1d5db'}`,
-              }}
-            >
-              <Zap size={14} />
-              EVA: {evaEnabled ? 'Permitido' : 'Bloqueado'}
-            </button>
-          )}
           <button
             type="button"
             onClick={() => window.print()}
@@ -287,6 +271,39 @@ const SessionDetail: React.FC<SessionDetailProps> = ({
           </table>
         </div>
       )}
+
+      {/* ── Control EVA ── */}
+      <div className="bg-white border border-[#e8e2d9] rounded-xl p-4 mb-4 print:hidden">
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-2">
+            <Zap size={15} style={{ color: '#9b8ec4' }} />
+            <span className="font-semibold text-sm" style={{ color: '#5a6272' }}>
+              Estimulación Vibroacústica (EVA)
+            </span>
+          </div>
+          <button
+            type="button"
+            onClick={toggleEva}
+            disabled={evaLoading || !session.is_active}
+            className="flex items-center gap-2 px-3 py-2 rounded-lg text-sm font-semibold transition-colors"
+            style={{
+              background: evaEnabled ? '#ede9fe' : '#f3f4f6',
+              color: evaEnabled ? '#7c3aed' : '#6b7280',
+              border: `1px solid ${evaEnabled ? '#c4b5fd' : '#d1d5db'}`,
+              opacity: !session.is_active ? 0.55 : 1,
+              cursor: !session.is_active ? 'not-allowed' : 'pointer',
+            }}
+          >
+            <Zap size={14} />
+            {evaEnabled ? 'Permitido' : 'Bloqueado'}
+          </button>
+        </div>
+        {!session.is_active && (
+          <p className="text-xs mt-2" style={{ color: '#8e96a3' }}>
+            Solo disponible durante una sesión activa
+          </p>
+        )}
+      </div>
 
       {/* ── Tabla de activaciones EVA ── */}
       {!isLoading && evaPairs.length > 0 && (
