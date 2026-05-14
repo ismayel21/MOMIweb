@@ -92,7 +92,7 @@ const SessionDetail: React.FC<SessionDetailProps> = ({
 
   // Ancho dinámico: 3px por punto, mínimo 600px
   const ctgWidth = Math.max(600, Math.max(fhrR.length, tocoR.length) * 3);
-  const hasCTG   = fhrR.length > 0 || tocoR.length > 0 || btnPairs.length > 0;
+  const hasCTG   = fhrR.length > 0 || tocoR.length > 0;
 
   // Parear eventos de botón (PRESS + RELEASE) — timestamps en ms para el eje numérico
   interface BtnPair { startMs: number; endMs?: number; }
