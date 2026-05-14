@@ -49,6 +49,8 @@ class MQTTBridge:
         # Timestamp de la última predicción IA recibida de la Raspi
         # Si la Raspi está activa (último msg < 30s), el backend no duplica
         self._raspi_ai_active: float = 0.0
+        # Último estado conocido del EVA para detectar transiciones (no heartbeats)
+        self._eva_active: bool = False
     
     def on_connect(self, client, userdata, flags, rc):
         """Callback cuando se conecta al broker"""
@@ -181,6 +183,42 @@ class MQTTBridge:
                 # Marcar que la Raspi está enviando predicciones
                 # para que el backend no duplique
                 self._raspi_ai_active = time.time()
+                return
+
+            # ── Estado EVA — guardar evento y broadcast solo en cambio de estado ──
+            if sensor_key == "feto/eva":
+                activo    = bool(data.get("activo", False))
+                bloqueado = bool(data.get("bloqueado", False))
+                _db_eva = SessionLocal()
+                try:
+                    _sess_eva = _db_eva.query(MonitoringSession).filter(
+                        MonitoringSession.is_active == True
+                    ).order_by(MonitoringSession.start_time.desc()).first()
+                    if _sess_eva:
+                        # Sincronizar eva_enabled con el estado real del hardware
+                        _sess_eva.eva_enabled = not bloqueado
+                        _db_eva.commit()
+
+                        # Solo guardar evento y emitir WS en transición de estado
+                        if activo != self._eva_active:
+                            self._eva_active = activo
+                            etype = "EVA_START" if activo else "EVA_STOP"
+                            ev_obj = Event(
+                                session_id=_sess_eva.id,
+                                event_type=etype,
+                                timestamp=datetime.utcnow(),
+                                description="Estimulación vibroacústica",
+                            )
+                            _db_eva.add(ev_obj)
+                            _db_eva.commit()
+                            self._broadcast(send_button_event(_sess_eva.patient_id, {
+                                "event": etype,
+                                "patient_id": _sess_eva.patient_id,
+                                "timestamp": datetime.utcnow().isoformat(),
+                            }))
+                            logger.info(f"EVA {etype} guardado (sesión {_sess_eva.id})")
+                finally:
+                    _db_eva.close()
                 return
 
             # ── Datos de sensores ────────────────────────────────────────
