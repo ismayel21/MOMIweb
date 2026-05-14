@@ -46,7 +46,10 @@ interface SessionDetailProps {
   isLoading: boolean;
 }
 
-const BTN_COLOR = '#F39C12';
+const BTN_COLOR  = '#F39C12';
+const EVA_COLOR  = '#6a9e8a';
+const PRINT_W    = 680;          // px — cabe en A4 portrait con margen 1.5 cm
+const PRINT_SEG  = 5 * 60_000;  // ms por segmento CTG impreso
 
 const SessionDetail: React.FC<SessionDetailProps> = ({
   session, patient, readings, events, isLoading,
@@ -160,6 +163,40 @@ const SessionDetail: React.FC<SessionDetailProps> = ({
   ];
   const ctgXMin = allCtgMs.length ? Math.min(...allCtgMs) : Date.now() - 60_000;
   const ctgXMax = allCtgMs.length ? Math.max(...allCtgMs) : Date.now();
+
+  // ── Segmentos CTG para impresión (5 min c/u) ──────────────────────────────
+  interface PrintSeg {
+    t: number; segEnd: number;
+    fhrSeg: { t: number; FCF: number | undefined }[];
+    tocoSeg: { t: number; Toco: number | null | undefined }[];
+    btnSeg: BtnPair[];
+    evaSeg: EvaPair[];
+  }
+  const printSegments: PrintSeg[] = [];
+  if (hasCTG) {
+    for (let t = ctgXMin; t < ctgXMax; t += PRINT_SEG) {
+      const segEnd = Math.min(t + PRINT_SEG, ctgXMax);
+      const fhrSeg  = fhrR
+        .filter(r => { const ms = new Date(r.timestamp).getTime(); return ms >= t && ms <= segEnd; })
+        .map(r => ({ t: new Date(r.timestamp).getTime(), FCF: r.heart_rate }));
+      const tocoSeg = tocoR
+        .filter(r => { const ms = new Date(r.timestamp).getTime(); return ms >= t && ms <= segEnd; })
+        .map(r => ({ t: new Date(r.timestamp).getTime(), Toco: r.contraction_intensity }));
+      if (fhrSeg.length === 0 && tocoSeg.length === 0) continue;
+      printSegments.push({
+        t, segEnd, fhrSeg, tocoSeg,
+        btnSeg: btnPairs.filter(p => p.startMs <= segEnd && (p.endMs ?? p.startMs) >= t),
+        evaSeg: evaPairs.filter(p => p.startMs <= segEnd && (p.endMs ?? p.startMs) >= t),
+      });
+    }
+  }
+
+  // Datos SpO₂ y PA para gráficos de impresión (sesión completa, sin slice)
+  const spo2PrintData = readings
+    .filter(r => r.sensor_type === SensorType.SPO2)
+    .map(r => ({ t: new Date(r.timestamp).getTime(), SpO2: r.spo2, FCM: r.heart_rate }));
+  const bpPrintData = bpR
+    .map(r => ({ t: new Date(r.timestamp).getTime(), Sis: r.systolic_bp, Dia: r.diastolic_bp }));
 
   return (
     <div>
@@ -549,6 +586,173 @@ const SessionDetail: React.FC<SessionDetailProps> = ({
                   </>)}
                 </div>
               )}
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* ════════════════════════════════════════════════════════
+           SECCIÓN SOLO PARA IMPRESIÓN — gráficos completos
+          ════════════════════════════════════════════════════════ */}
+      {!isLoading && (spo2PrintData.length > 0 || bpPrintData.length > 0 || printSegments.length > 0) && (
+        <div className="hidden print:block">
+          {/* Regla de página A4 portrait con margen 1.5 cm */}
+          <style>{`@media print{@page{size:A4 portrait;margin:1.5cm}}`}</style>
+
+          {/* ── SpO₂ y FC Materna ── */}
+          {spo2PrintData.length > 0 && (
+            <div style={{ breakInside: 'avoid', marginBottom: 16 }}>
+              <p style={{ fontSize: 10, fontWeight: 600, color: '#5a6272', marginBottom: 4 }}>
+                SpO₂ y FC Materna — sesión completa
+              </p>
+              <ComposedChart width={PRINT_W} height={110} data={spo2PrintData}
+                margin={{ top: 4, right: 8, bottom: 4, left: 0 }}>
+                <CartesianGrid stroke="#e8e2d9" strokeWidth={0.5} />
+                <XAxis dataKey="t" type="number" scale="time"
+                  domain={[spo2PrintData[0].t, spo2PrintData[spo2PrintData.length - 1].t]}
+                  tickFormatter={(t: number) => format(new Date(t), 'HH:mm')}
+                  tick={{ fontSize: 8 }} />
+                <YAxis yAxisId="spo2" domain={[80, 100]} tick={{ fontSize: 8 }} width={28}
+                  label={{ value: 'SpO₂ %', angle: -90, position: 'insideLeft', style: { fontSize: 8, fill: '#6a9e8a' } }} />
+                <YAxis yAxisId="hr" orientation="right" domain={[40, 160]} tick={{ fontSize: 8 }} width={28}
+                  label={{ value: 'FCM bpm', angle: 90, position: 'insideRight', style: { fontSize: 8, fill: '#9b8ec4' } }} />
+                <Line yAxisId="spo2" type="monotone" dataKey="SpO2" stroke="#6a9e8a"
+                  strokeWidth={1.2} dot={false} isAnimationActive={false} connectNulls={false} />
+                <Line yAxisId="hr" type="monotone" dataKey="FCM" stroke="#9b8ec4"
+                  strokeWidth={1.2} dot={false} isAnimationActive={false} connectNulls={false} />
+              </ComposedChart>
+            </div>
+          )}
+
+          {/* ── Presión Arterial ── */}
+          {bpPrintData.length > 0 && (
+            <div style={{ breakInside: 'avoid', marginBottom: 16 }}>
+              <p style={{ fontSize: 10, fontWeight: 600, color: '#5a6272', marginBottom: 4 }}>
+                Presión Arterial — sesión completa
+              </p>
+              <ComposedChart width={PRINT_W} height={100} data={bpPrintData}
+                margin={{ top: 4, right: 8, bottom: 4, left: 0 }}>
+                <CartesianGrid stroke="#e8e2d9" strokeWidth={0.5} />
+                <XAxis dataKey="t" type="number" scale="time"
+                  domain={[bpPrintData[0].t, bpPrintData[bpPrintData.length - 1].t]}
+                  tickFormatter={(t: number) => format(new Date(t), 'HH:mm')}
+                  tick={{ fontSize: 8 }} />
+                <YAxis domain={[40, 200]} tick={{ fontSize: 8 }} width={28}
+                  label={{ value: 'mmHg', angle: -90, position: 'insideLeft', style: { fontSize: 8, fill: '#c4848c' } }} />
+                <Line type="monotone" dataKey="Sis" stroke="#c4848c"
+                  strokeWidth={1.2} dot={false} isAnimationActive={false} connectNulls={false} />
+                <Line type="monotone" dataKey="Dia" stroke="#9b8ec4"
+                  strokeWidth={1.2} dot={false} isAnimationActive={false} connectNulls={false} />
+              </ComposedChart>
+            </div>
+          )}
+
+          {/* ── CTG segmentado (tira de papel) ── */}
+          {printSegments.length > 0 && (
+            <div style={{ breakBefore: (spo2PrintData.length > 0 || bpPrintData.length > 0) ? 'page' : 'auto' }}>
+              <p style={{ fontSize: 10, fontWeight: 600, color: '#5a6272', marginBottom: 6 }}>
+                Cardiotocografía (CTG) — {printSegments.length} segmentos de 5 min
+              </p>
+
+              {printSegments.map((seg, si) => {
+                const segTicks = Array.from({ length: 6 }, (_, i) => seg.t + i * 60_000)
+                  .filter(t => t <= seg.segEnd);
+                return (
+                  <div key={si} style={{ breakInside: 'avoid', marginBottom: 6 }}>
+                    {/* Etiqueta del segmento */}
+                    <div style={{ fontSize: 8, color: '#8e96a3', marginBottom: 1 }}>
+                      {format(new Date(seg.t), 'HH:mm:ss')} — {format(new Date(seg.segEnd), 'HH:mm:ss')}
+                    </div>
+
+                    {/* Panel FCF */}
+                    {seg.fhrSeg.length > 0 && (
+                      <ComposedChart width={PRINT_W} height={140} data={seg.fhrSeg}
+                        margin={{ top: 2, right: 8, bottom: 0, left: 0 }}>
+                        <CartesianGrid stroke="#e8e2d9" strokeWidth={0.5} />
+                        <XAxis dataKey="t" type="number" scale="time"
+                          domain={[seg.t, seg.segEnd]} ticks={segTicks}
+                          tickFormatter={(t: number) => format(new Date(t), 'HH:mm:ss')}
+                          tick={{ fontSize: 7 }} hide />
+                        <YAxis domain={[50, 210]}
+                          ticks={[60, 80, 100, 120, 140, 160, 180, 200]}
+                          tick={{ fontSize: 7 }} width={32}
+                          label={{ value: 'FCF bpm', angle: -90, position: 'insideLeft', style: { fontSize: 7, fill: '#E74C3C' } }} />
+                        {seg.btnSeg.flatMap((p, j) => [
+                          p.endMs != null ? <ReferenceArea key={`pfa-${si}-${j}`}
+                            x1={Math.max(p.startMs, seg.t)} x2={Math.min(p.endMs, seg.segEnd)}
+                            fill={BTN_COLOR} fillOpacity={0.2} /> : null,
+                          <ReferenceLine key={`pfs-${si}-${j}`} x={p.startMs}
+                            stroke={BTN_COLOR} strokeWidth={2}
+                            label={{ value: '▼', position: 'insideTopRight', style: { fontSize: 9, fill: BTN_COLOR } }} />,
+                          p.endMs != null ? <ReferenceLine key={`pfe-${si}-${j}`} x={p.endMs}
+                            stroke={BTN_COLOR} strokeWidth={1} strokeDasharray="4 2" /> : null,
+                        ])}
+                        {seg.evaSeg.flatMap((p, j) => [
+                          p.endMs != null ? <ReferenceArea key={`pea-${si}-${j}`}
+                            x1={Math.max(p.startMs, seg.t)} x2={Math.min(p.endMs, seg.segEnd)}
+                            fill={EVA_COLOR} fillOpacity={0.07} /> : null,
+                          <ReferenceLine key={`pes-${si}-${j}`} x={p.startMs}
+                            stroke={EVA_COLOR} strokeWidth={1} strokeDasharray="3 2" />,
+                          p.endMs != null ? <ReferenceLine key={`pee-${si}-${j}`} x={p.endMs}
+                            stroke={EVA_COLOR} strokeWidth={1} strokeDasharray="1 3" /> : null,
+                        ])}
+                        <Line type="monotone" dataKey="FCF" stroke="#E74C3C"
+                          strokeWidth={1.2} dot={false} isAnimationActive={false} connectNulls={false} />
+                      </ComposedChart>
+                    )}
+
+                    {/* Panel Toco */}
+                    {seg.tocoSeg.length > 0 && (
+                      <ComposedChart width={PRINT_W} height={90} data={seg.tocoSeg}
+                        margin={{ top: 0, right: 8, bottom: 4, left: 0 }}>
+                        <CartesianGrid stroke="#e8e2d9" strokeWidth={0.5} />
+                        <XAxis dataKey="t" type="number" scale="time"
+                          domain={[seg.t, seg.segEnd]} ticks={segTicks}
+                          tickFormatter={(t: number) => format(new Date(t), 'HH:mm:ss')}
+                          tick={{ fontSize: 7 }} />
+                        <YAxis tick={{ fontSize: 7 }} width={32}
+                          label={{ value: 'Toco', angle: -90, position: 'insideLeft', style: { fontSize: 7, fill: '#3498DB' } }} />
+                        {seg.btnSeg.flatMap((p, j) => [
+                          p.endMs != null ? <ReferenceArea key={`pta-${si}-${j}`}
+                            x1={Math.max(p.startMs, seg.t)} x2={Math.min(p.endMs, seg.segEnd)}
+                            fill={BTN_COLOR} fillOpacity={0.2} /> : null,
+                          <ReferenceLine key={`pts-${si}-${j}`} x={p.startMs}
+                            stroke={BTN_COLOR} strokeWidth={2} />,
+                          p.endMs != null ? <ReferenceLine key={`pte-${si}-${j}`} x={p.endMs}
+                            stroke={BTN_COLOR} strokeWidth={1} strokeDasharray="4 2" /> : null,
+                        ])}
+                        {seg.evaSeg.flatMap((p, j) => [
+                          p.endMs != null ? <ReferenceArea key={`ptea-${si}-${j}`}
+                            x1={Math.max(p.startMs, seg.t)} x2={Math.min(p.endMs, seg.segEnd)}
+                            fill={EVA_COLOR} fillOpacity={0.07} /> : null,
+                          <ReferenceLine key={`ptes-${si}-${j}`} x={p.startMs}
+                            stroke={EVA_COLOR} strokeWidth={1} strokeDasharray="3 2" />,
+                          p.endMs != null ? <ReferenceLine key={`ptee-${si}-${j}`} x={p.endMs}
+                            stroke={EVA_COLOR} strokeWidth={1} strokeDasharray="1 3" /> : null,
+                        ])}
+                        <Line type="monotone" dataKey="Toco" stroke="#3498DB"
+                          strokeWidth={1.2} dot={false} isAnimationActive={false} connectNulls={false} />
+                      </ComposedChart>
+                    )}
+                  </div>
+                );
+              })}
+
+              {/* Leyenda al pie del CTG */}
+              <div style={{ display: 'flex', gap: 16, marginTop: 6, fontSize: 8, color: '#8e96a3', breakInside: 'avoid' }}>
+                {btnPairs.length > 0 && (
+                  <span style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
+                    <span style={{ display: 'inline-block', width: 12, height: 2, background: BTN_COLOR }} />
+                    Botón materno
+                  </span>
+                )}
+                {evaPairs.length > 0 && (
+                  <span style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
+                    <span style={{ display: 'inline-block', width: 12, height: 0, borderTop: `1px dashed ${EVA_COLOR}` }} />
+                    Estimulación EVA
+                  </span>
+                )}
+              </div>
             </div>
           )}
         </div>
