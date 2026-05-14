@@ -7,6 +7,7 @@ import { AlertsList } from '@/components/dashboard/AlertsList';
 import { BloodPressurePanel } from '@/components/dashboard/BloodPressurePanel';
 import { OnboardingGuide } from '@/components/dashboard/OnboardingGuide';
 import { AudioControl } from '@/components/dashboard/AudioControl';
+import { EvaControl } from '@/components/dashboard/EvaControl';
 import { AICard } from '@/components/dashboard/AICard';
 import { SensorType } from '@/types/reading';
 import { Activity, LogOut, ClipboardList, Users } from 'lucide-react';
@@ -179,6 +180,7 @@ export const DashboardPage: React.FC = () => {
           <div className="lg:col-span-2 space-y-3">
             <CTGChart />
             <AudioControl />
+            <EvaControl />
           </div>
 
           {/* Columna derecha: Presión arterial + Alertas */}
