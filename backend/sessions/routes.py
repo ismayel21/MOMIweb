@@ -236,6 +236,21 @@ async def get_session_summary(
 
     avg_btn_duration = round(sum(btn_durations) / len(btn_durations), 1) if btn_durations else None
 
+    # Conteo de activaciones EVA (solo contar transiciones a activo)
+    eva_events = db.query(Event).filter(
+        Event.session_id == session_id,
+        Event.event_type.in_(["EVA_START", "EVA_STOP"]),
+    ).order_by(Event.timestamp).all()
+
+    eva_count = 0
+    was_eva_active = False
+    for ev in eva_events:
+        if ev.event_type == "EVA_START" and not was_eva_active:
+            eva_count += 1
+            was_eva_active = True
+        elif ev.event_type == "EVA_STOP":
+            was_eva_active = False
+
     return {
         "session_id":        session_id,
         "avg_fhr":           avg_fhr,
@@ -246,6 +261,7 @@ async def get_session_summary(
         "contraction_count": contractions,
         "button_press_count":     btn_count,
         "avg_button_duration_s":  avg_btn_duration,
+        "eva_activation_count":   eva_count,
     }
 
 

@@ -398,6 +398,28 @@ def set_eva_state(
     return {"ok": True, "eva_enabled": sess.eva_enabled}
 
 
+# ═══════════════════════════════════════════════════════════
+#  PUT /api/device/sessions/{uuid}/eva_state
+#  El Raspi reporta su estado real de bloqueo EVA — solo actualiza DB,
+#  sin reenviar MQTT (para no crear loop de retroalimentación).
+# ═══════════════════════════════════════════════════════════
+
+@router.put("/sessions/{session_uuid}/eva_state")
+def report_eva_state(
+    session_uuid: str,
+    body: EvaStateRequest,
+    db: Session = Depends(get_db),
+):
+    sess = db.query(MonitoringSession).filter(
+        MonitoringSession.session_uuid == session_uuid
+    ).first()
+    if not sess:
+        return {"ok": False, "detail": "not found"}
+    sess.eva_enabled = body.enabled
+    db.commit()
+    return {"ok": True, "eva_enabled": sess.eva_enabled}
+
+
 # ─── Helpers internos ────────────────────────────────────────
 
 def _f(v) -> Optional[float]:

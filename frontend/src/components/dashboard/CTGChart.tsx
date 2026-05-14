@@ -230,7 +230,11 @@ export const CTGChart: React.FC<CTGChartProps> = ({
         return copy;
       });
     } else if (latestButtonEvent.event === 'EVA_START' && externalEvaEvents == null) {
-      setInternalEvaEvents(prev => [...prev, { startTime: now }]);
+      setInternalEvaEvents(prev => {
+        // No crear nuevo evento si ya hay uno abierto (heartbeat duplicado)
+        if (prev.length > 0 && prev[prev.length - 1].endTime == null) return prev;
+        return [...prev, { startTime: now }];
+      });
     } else if (latestButtonEvent.event === 'EVA_STOP' && externalEvaEvents == null) {
       setInternalEvaEvents(prev => {
         const copy = [...prev];

@@ -5,7 +5,7 @@ import { sessionsAPI, type SessionSummary } from '@/api/sessions';
 import { useWebSocket } from '@/contexts/WebSocketContext';
 import { SessionTimer } from '@/components/dashboard/SessionTimer';
 import type { MonitoringSession } from '@/types/session';
-import { X, Activity, Heart, Droplets, Gauge, TrendingUp, Hand } from 'lucide-react';
+import { X, Activity, Heart, Droplets, Gauge, TrendingUp, Hand, Zap } from 'lucide-react';
 
 // ── Modal de resumen de sesión ───────────────────────────────────────────────
 interface SummaryModalProps {
@@ -57,6 +57,11 @@ const SummaryModal: React.FC<SummaryModalProps> = ({ summary, patientName, onCon
           {row(<Gauge className="w-4 h-4 text-[#9b8ec4]" />,   'Presión Arterial prom.', bp)}
           {row(<TrendingUp className="w-4 h-4 text-[#6a9e8a]" />, 'Contracciones',         `${summary.contraction_count}`)}
           {row(<Hand className="w-4 h-4 text-[#9b8ec4]" />,    'Percepción materna',    btnAnalysis)}
+          {summary.eva_activation_count > 0 && row(
+            <Zap className="w-4 h-4 text-[#6a9e8a]" />,
+            'Estimulación EVA',
+            `${summary.eva_activation_count} activación${summary.eva_activation_count !== 1 ? 'es' : ''}`,
+          )}
         </div>
 
         <div className="p-5 pt-0 flex gap-3">

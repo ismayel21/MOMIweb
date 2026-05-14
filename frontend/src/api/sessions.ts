@@ -58,4 +58,5 @@ export interface SessionSummary {
   contraction_count: number;
   button_press_count: number;
   avg_button_duration_s: number | null;
+  eva_activation_count: number;
 }

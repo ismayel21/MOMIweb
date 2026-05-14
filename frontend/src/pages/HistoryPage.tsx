@@ -136,12 +136,13 @@ const SessionDetail: React.FC<SessionDetailProps> = ({
   }
   if (currentPress != null) btnPairs.push({ startMs: currentPress });
 
-  // Parear eventos EVA (START + STOP) — ms para gráficos, string para tabla
+  // Parear eventos EVA (START + STOP) — ms para gráficos
+  // Solo se abre un nuevo par cuando no hay uno ya abierto (ignora heartbeats duplicados)
   interface EvaPair { startMs: number; endMs?: number; }
   const evaPairs: EvaPair[] = [];
   let currentEvaStart: number | null = null;
   for (const ev of events) {
-    if (ev.event_type === 'EVA_START') {
+    if (ev.event_type === 'EVA_START' && currentEvaStart == null) {
       currentEvaStart = new Date(ev.timestamp).getTime();
     } else if (ev.event_type === 'EVA_STOP' && currentEvaStart != null) {
       evaPairs.push({ startMs: currentEvaStart, endMs: new Date(ev.timestamp).getTime() });
