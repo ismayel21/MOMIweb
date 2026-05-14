@@ -92,22 +92,31 @@ const SessionDetail: React.FC<SessionDetailProps> = ({
 
   // Ancho dinámico: 3px por punto, mínimo 600px
   const ctgWidth = Math.max(600, Math.max(fhrR.length, tocoR.length) * 3);
-  const hasCTG   = fhrR.length > 0 || tocoR.length > 0;
+  const hasCTG   = fhrR.length > 0 || tocoR.length > 0 || btnPairs.length > 0;
 
-  // Parear eventos de botón (PRESS + RELEASE) para dibujar áreas en el CTG
-  interface BtnPair { startTime: string; endTime?: string; }
+  // Parear eventos de botón (PRESS + RELEASE) — timestamps en ms para el eje numérico
+  interface BtnPair { startMs: number; endMs?: number; }
   const btnPairs: BtnPair[] = [];
-  let currentPress: string | null = null;
+  let currentPress: number | null = null;
   for (const ev of events) {
     if (ev.event_type === 'BUTTON_PRESS') {
-      currentPress = ev.timestamp;
-    } else if (ev.event_type === 'BUTTON_RELEASE' && currentPress) {
-      btnPairs.push({ startTime: currentPress, endTime: ev.timestamp });
+      currentPress = new Date(ev.timestamp).getTime();
+    } else if (ev.event_type === 'BUTTON_RELEASE' && currentPress != null) {
+      btnPairs.push({ startMs: currentPress, endMs: new Date(ev.timestamp).getTime() });
       currentPress = null;
     }
   }
-  // Pulsación sin soltar aún
-  if (currentPress) btnPairs.push({ startTime: currentPress });
+  if (currentPress != null) btnPairs.push({ startMs: currentPress });
+
+  // Dominio X compartido: cubre readings Y eventos de botón para que las marcas
+  // siempre queden dentro del rango visible aunque no coincidan con ningún dato
+  const allCtgMs = [
+    ...fhrR.map(r  => new Date(r.timestamp).getTime()),
+    ...tocoR.map(r => new Date(r.timestamp).getTime()),
+    ...btnPairs.flatMap(p => p.endMs != null ? [p.startMs, p.endMs] : [p.startMs]),
+  ];
+  const ctgXMin = allCtgMs.length ? Math.min(...allCtgMs) : Date.now() - 60_000;
+  const ctgXMax = allCtgMs.length ? Math.max(...allCtgMs) : Date.now();
 
   // Parear eventos EVA (START + STOP) — solo para mostrar tabla de tiempos
   interface EvaPair { startTime: string; endTime?: string; }
@@ -380,87 +389,85 @@ const SessionDetail: React.FC<SessionDetailProps> = ({
               </p>
 
               <div className="overflow-x-auto">
+
                 {/* Panel FCF */}
                 {fhrR.length > 0 && (
                   <div style={{ width: ctgWidth, minWidth: '100%' }}>
                     <ComposedChart
                       width={ctgWidth}
                       height={180}
-                      data={fhrR.map(r => ({ t: fmtTime(r.timestamp), FCF: r.heart_rate }))}
+                      data={fhrR.map(r => ({ t: new Date(r.timestamp).getTime(), FCF: r.heart_rate }))}
                       margin={{ top: 5, right: 8, bottom: 0, left: 0 }}
                     >
                       <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" />
-                      <XAxis dataKey="t" tick={{ fontSize: 9 }} interval="preserveStartEnd" />
-                      <YAxis
-                        domain={[50, 210]}
-                        tick={{ fontSize: 9 }}
-                        width={38}
+                      <XAxis
+                        dataKey="t" type="number" scale="time"
+                        domain={[ctgXMin, ctgXMax]}
+                        tickFormatter={(t: number) => format(new Date(t), 'HH:mm:ss')}
+                        tick={{ fontSize: 9 }} hide
+                      />
+                      <YAxis domain={[50, 210]} tick={{ fontSize: 9 }} width={38}
                         label={{ value: 'FCF (bpm)', angle: -90, position: 'insideLeft', style: { fontSize: 9, fill: '#E74C3C' } }}
                       />
-                      <Tooltip formatter={(v: number) => [`${v} bpm`, 'FCF']} />
-                      <Line
-                        type="monotone"
-                        dataKey="FCF"
-                        stroke="#E74C3C"
-                        strokeWidth={1.5}
-                        dot={false}
-                        isAnimationActive={false}
-                        connectNulls={false}
+                      <Tooltip
+                        labelFormatter={(t: number) => format(new Date(t), 'HH:mm:ss')}
+                        formatter={(v: number) => [`${v} bpm`, 'FCF']}
                       />
+                      {btnPairs.flatMap((pair, i) => [
+                        pair.endMs != null
+                          ? <ReferenceArea key={`fa-${i}`} x1={pair.startMs} x2={pair.endMs}
+                              fill={BTN_COLOR} fillOpacity={0.25} /> : null,
+                        <ReferenceLine key={`fs-${i}`} x={pair.startMs}
+                          stroke={BTN_COLOR} strokeWidth={3}
+                          label={{ value: '▼', position: 'insideTopRight',
+                            style: { fontSize: 12, fill: BTN_COLOR, fontWeight: 'bold' } }} />,
+                        pair.endMs != null
+                          ? <ReferenceLine key={`fe-${i}`} x={pair.endMs}
+                              stroke={BTN_COLOR} strokeWidth={2} strokeDasharray="5 3" /> : null,
+                      ])}
+                      <Line type="monotone" dataKey="FCF" stroke="#E74C3C"
+                        strokeWidth={1.5} dot={false} isAnimationActive={false} connectNulls={false} />
                     </ComposedChart>
                   </div>
                 )}
 
-                {/* Panel Toco + eventos del botón materno */}
+                {/* Panel Toco */}
                 {tocoR.length > 0 && (
                   <div style={{ width: ctgWidth, minWidth: '100%' }}>
                     <ComposedChart
                       width={ctgWidth}
                       height={130}
-                      data={tocoR.map(r => ({ t: fmtTime(r.timestamp), Toco: r.contraction_intensity }))}
+                      data={tocoR.map(r => ({ t: new Date(r.timestamp).getTime(), Toco: r.contraction_intensity }))}
                       margin={{ top: 0, right: 8, bottom: 5, left: 0 }}
                     >
                       <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" />
-                      <XAxis dataKey="t" tick={{ fontSize: 9 }} interval="preserveStartEnd" />
-                      <YAxis
+                      <XAxis
+                        dataKey="t" type="number" scale="time"
+                        domain={[ctgXMin, ctgXMax]}
+                        tickFormatter={(t: number) => format(new Date(t), 'HH:mm:ss')}
                         tick={{ fontSize: 9 }}
-                        width={38}
+                      />
+                      <YAxis tick={{ fontSize: 9 }} width={38}
                         label={{ value: 'Toco', angle: -90, position: 'insideLeft', style: { fontSize: 9, fill: '#3498DB' } }}
                       />
-                      <Tooltip formatter={(v: number) => [`${v}`, 'Toco']} />
-
-                      {/* Áreas y líneas del botón materno */}
-                      {btnPairs.map((pair, i) => {
-                        const x1 = fmtTime(pair.startTime);
-                        const x2 = pair.endTime ? fmtTime(pair.endTime) : undefined;
-                        return (
-                          <React.Fragment key={i}>
-                            {x2 && (
-                              <ReferenceArea
-                                x1={x1}
-                                x2={x2}
-                                fill={BTN_COLOR}
-                                fillOpacity={0.15}
-                                label={{ value: 'Botón Materno', position: 'insideTop', style: { fontSize: 8, fill: BTN_COLOR } }}
-                              />
-                            )}
-                            <ReferenceLine x={x1} stroke={BTN_COLOR} strokeWidth={2} />
-                            {x2 && (
-                              <ReferenceLine x={x2} stroke={BTN_COLOR} strokeWidth={2} strokeDasharray="6 3" />
-                            )}
-                          </React.Fragment>
-                        );
-                      })}
-
-                      <Line
-                        type="monotone"
-                        dataKey="Toco"
-                        stroke="#3498DB"
-                        strokeWidth={1.5}
-                        dot={false}
-                        isAnimationActive={false}
-                        connectNulls={false}
+                      <Tooltip
+                        labelFormatter={(t: number) => format(new Date(t), 'HH:mm:ss')}
+                        formatter={(v: number) => [`${v}`, 'Toco']}
                       />
+                      {btnPairs.flatMap((pair, i) => [
+                        pair.endMs != null
+                          ? <ReferenceArea key={`ta-${i}`} x1={pair.startMs} x2={pair.endMs}
+                              fill={BTN_COLOR} fillOpacity={0.25} /> : null,
+                        <ReferenceLine key={`ts-${i}`} x={pair.startMs}
+                          stroke={BTN_COLOR} strokeWidth={3}
+                          label={{ value: '▼', position: 'insideTopRight',
+                            style: { fontSize: 12, fill: BTN_COLOR, fontWeight: 'bold' } }} />,
+                        pair.endMs != null
+                          ? <ReferenceLine key={`te-${i}`} x={pair.endMs}
+                              stroke={BTN_COLOR} strokeWidth={2} strokeDasharray="5 3" /> : null,
+                      ])}
+                      <Line type="monotone" dataKey="Toco" stroke="#3498DB"
+                        strokeWidth={1.5} dot={false} isAnimationActive={false} connectNulls={false} />
                     </ComposedChart>
                   </div>
                 )}

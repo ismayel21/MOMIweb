@@ -184,12 +184,35 @@ async def get_session_summary(
     avg_sys   = avg_field(SensorType.BLOOD_PRESSURE,   SensorReading.systolic_bp)
     avg_dia   = avg_field(SensorType.BLOOD_PRESSURE,   SensorReading.diastolic_bp)
 
-    # Número de contracciones (eventos de fin de contracción guardados)
-    contractions = db.query(func.count(SensorReading.id)).filter(
+    # Número de contracciones: contar episodios (cruces de umbral), no lecturas individuales.
+    # Cada lectura toco tiene intensidad continua; contar cada una daría cientos de falsos.
+    toco_rows = db.query(
+        SensorReading.contraction_intensity,
+        SensorReading.timestamp,
+    ).filter(
         SensorReading.session_id == session_id,
         SensorReading.sensor_type == SensorType.TOCODYNAMOMETER,
-        SensorReading.contraction_intensity > 0,
-    ).scalar() or 0
+        SensorReading.contraction_intensity.isnot(None),
+    ).order_by(SensorReading.timestamp).all()
+
+    contractions = 0
+    if toco_rows:
+        vals = [r.contraction_intensity for r in toco_rows]
+        peak = max(vals)
+        threshold = max(5.0, peak * 0.25)   # 25% del pico, mínimo 5 unidades
+        in_c = False
+        last_end_ts = None
+        COOLDOWN_S = 15
+        for row in toco_rows:
+            v, ts = row.contraction_intensity, row.timestamp
+            if not in_c and v > threshold:
+                ok = last_end_ts is None or (ts - last_end_ts).total_seconds() >= COOLDOWN_S
+                if ok:
+                    contractions += 1
+                    in_c = True
+            elif in_c and v <= threshold * 0.5:   # histéresis al salir
+                in_c = False
+                last_end_ts = ts
 
     # Análisis del botón materno
     events = db.query(Event).filter(
