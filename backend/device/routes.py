@@ -378,6 +378,13 @@ def set_eva_state(
         raise HTTPException(status_code=404, detail="Session not found")
     sess.eva_enabled = body.enabled
     db.commit()
+
+    # Publicar directamente al nodo EVA vía MQTT
+    from realtime.mqtt_bridge import mqtt_bridge
+    from config import MQTT_DEVICE_ID
+    topic = f"momi/{MQTT_DEVICE_ID}/feto/eva/control"
+    mqtt_bridge.publish(topic, {"bloqueado": not sess.eva_enabled})
+
     return {"ok": True, "eva_enabled": sess.eva_enabled}
 
 
