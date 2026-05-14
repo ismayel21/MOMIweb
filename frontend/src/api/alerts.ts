@@ -24,5 +24,12 @@ export const alertsAPI = {
     });
     return response.data;
   },
+
+  acknowledgeAll: async (acknowledgedBy?: string): Promise<{ acknowledged: number }> => {
+    const response = await api.put<{ acknowledged: number }>('/alerts/acknowledge-all', {
+      acknowledged_by: acknowledgedBy ?? 'doctor',
+    });
+    return response.data;
+  },
 };
  

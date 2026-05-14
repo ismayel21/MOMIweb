@@ -118,6 +118,29 @@ async def create_alert(
     return alert
 
 
+@router.put("/acknowledge-all")
+async def acknowledge_all_alerts(
+    ack_data: AlertAcknowledge,
+    db: Session = Depends(get_db),
+    current_doctor: Doctor = Depends(get_current_doctor)
+):
+    """
+    Reconocer todas las alertas no reconocidas del doctor actual.
+    """
+    from models import Patient as PatientModel
+    now = datetime.utcnow()
+    updated = db.query(Alert).join(PatientModel).filter(
+        PatientModel.doctor_id == current_doctor.id,
+        Alert.acknowledged == False,
+    ).all()
+    for alert in updated:
+        alert.acknowledged = True
+        alert.acknowledged_at = now
+        alert.acknowledged_by = ack_data.acknowledged_by
+    db.commit()
+    return {"acknowledged": len(updated)}
+
+
 @router.put("/{alert_id}/acknowledge", response_model=AlertResponse)
 async def acknowledge_alert(
     alert_id: int,

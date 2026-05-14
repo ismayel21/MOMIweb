@@ -18,9 +18,17 @@ export const AlertsList: React.FC = () => {
     refetchInterval: 10000, // Refetch cada 10s
   });
 
-  // Mutation para reconocer alerta
+  // Mutation para reconocer alerta individual
   const acknowledgeMutation = useMutation({
     mutationFn: (alertId: number) => alertsAPI.acknowledge(alertId, user?.username),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['alerts'] });
+    },
+  });
+
+  // Mutation para reconocer todas las alertas
+  const acknowledgeAllMutation = useMutation({
+    mutationFn: () => alertsAPI.acknowledgeAll(user?.username),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['alerts'] });
     },
@@ -61,14 +69,27 @@ export const AlertsList: React.FC = () => {
 
   return (
     <div className="bg-white rounded-xl shadow-md p-6 border border-[#e8e2d9]">
-      <h2 className="text-xl font-bold mb-4" style={{ color: '#2e3440' }}>
-        Alertas Activas
-        {alerts && alerts.length > 0 && (
-          <span className="ml-2 px-2 py-1 text-white text-sm rounded-full" style={{ background: '#c4848c' }}>
-            {alerts.length}
-          </span>
+      <div className="flex items-center justify-between mb-4">
+        <h2 className="text-xl font-bold" style={{ color: '#2e3440' }}>
+          Alertas Activas
+          {alerts && alerts.length > 0 && (
+            <span className="ml-2 px-2 py-1 text-white text-sm rounded-full" style={{ background: '#c4848c' }}>
+              {alerts.length}
+            </span>
+          )}
+        </h2>
+        {alerts && alerts.length > 1 && (
+          <button
+            onClick={() => acknowledgeAllMutation.mutate()}
+            disabled={acknowledgeAllMutation.isPending}
+            className="flex items-center gap-1 px-3 py-1 text-sm bg-white border border-[#e8e2d9] rounded hover:bg-[#f4f1ec] transition-colors disabled:opacity-50"
+            style={{ color: '#5a6272' }}
+          >
+            <Check className="w-4 h-4" />
+            Reconocer todas
+          </button>
         )}
-      </h2>
+      </div>
 
       {!alerts || alerts.length === 0 ? (
         <div className="text-center py-8 text-[#8e96a3]">
