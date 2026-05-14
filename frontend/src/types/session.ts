@@ -6,6 +6,8 @@ export interface MonitoringSession {
   patient_id: number;
   patient?: Patient;
   is_active: boolean;
+  session_uuid?: string;
+  eva_enabled?: boolean;
   start_time: string;
   end_time?: string;
   duration_minutes?: number;

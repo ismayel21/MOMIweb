@@ -95,8 +95,9 @@ class MonitoringSession(Base):
     
     # Estado
     is_active = Column(Boolean, default=True)
+    eva_enabled = Column(Boolean, default=False)
     notes = Column(Text)
-    
+
     # Relaciones
     patient = relationship("Patient", back_populates="sessions")
     readings = relationship("SensorReading", back_populates="session", cascade="all, delete-orphan")

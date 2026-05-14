@@ -337,6 +337,50 @@ def push_button_event(
     return {"ok": True, "event_id": event.id}
 
 
+# ═══════════════════════════════════════════════════════════
+#  GET /api/device/sessions/{uuid}/state
+#  Raspi consulta cada ~40s para detectar fin de sesión o cambio de EVA
+# ═══════════════════════════════════════════════════════════
+
+@router.get("/sessions/{session_uuid}/state")
+def get_session_state(session_uuid: str, db: Session = Depends(get_db)):
+    sess = db.query(MonitoringSession).filter(
+        MonitoringSession.session_uuid == session_uuid
+    ).first()
+    if not sess:
+        return {"active": False, "eva_enabled": False, "not_found": True}
+    return {
+        "active":      sess.is_active,
+        "eva_enabled": bool(sess.eva_enabled),
+        "not_found":   False,
+    }
+
+
+# ═══════════════════════════════════════════════════════════
+#  PATCH /api/device/sessions/{uuid}/eva
+#  La web activa/desactiva EVA — el Raspi lo recoge en el poll
+# ═══════════════════════════════════════════════════════════
+
+class EvaStateRequest(BaseModel):
+    enabled: bool
+
+
+@router.patch("/sessions/{session_uuid}/eva")
+def set_eva_state(
+    session_uuid: str,
+    body: EvaStateRequest,
+    db: Session = Depends(get_db),
+):
+    sess = db.query(MonitoringSession).filter(
+        MonitoringSession.session_uuid == session_uuid
+    ).first()
+    if not sess:
+        raise HTTPException(status_code=404, detail="Session not found")
+    sess.eva_enabled = body.enabled
+    db.commit()
+    return {"ok": True, "eva_enabled": sess.eva_enabled}
+
+
 # ─── Helpers internos ────────────────────────────────────────
 
 def _f(v) -> Optional[float]:

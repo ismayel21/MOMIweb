@@ -50,6 +50,23 @@ const BTN_COLOR = '#F39C12';
 const SessionDetail: React.FC<SessionDetailProps> = ({
   session, patient, readings, events, isLoading,
 }) => {
+  const [evaEnabled, setEvaEnabled] = React.useState(session.eva_enabled ?? false);
+  const [evaLoading, setEvaLoading] = React.useState(false);
+
+  const toggleEva = async () => {
+    if (!session.session_uuid) return;
+    setEvaLoading(true);
+    try {
+      const res = await fetch(`/api/device/sessions/${session.session_uuid}/eva`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ enabled: !evaEnabled }),
+      });
+      if (res.ok) setEvaEnabled(e => !e);
+    } finally {
+      setEvaLoading(false);
+    }
+  };
   // Lecturas por tipo
   const fhrR  = readings.filter(r => r.sensor_type === SensorType.FETAL_DOPPLER && r.heart_rate);
   const spo2R = readings.filter(r => r.sensor_type === SensorType.SPO2 && r.spo2);
@@ -130,17 +147,39 @@ const SessionDetail: React.FC<SessionDetailProps> = ({
         <h3 className="text-lg font-bold flex items-center gap-2" style={{ color: '#2e3440' }}>
           <FileText size={18} style={{ color: '#6a9e8a' }} />
           Sesión #{session.id}
+          {session.is_active && (
+            <span className="text-xs font-semibold px-2 py-0.5 rounded-full"
+              style={{ background: '#dcfce7', color: '#16a34a' }}>● EN CURSO</span>
+          )}
         </h3>
-        <button
-          type="button"
-          onClick={() => window.print()}
-          className="flex items-center gap-2 px-3 py-2 text-white
-                     rounded-lg text-sm transition-colors"
-          style={{ background: '#6a9e8a' }}
-        >
-          <Printer size={14} />
-          Imprimir
-        </button>
+        <div className="flex items-center gap-2">
+          {session.is_active && session.session_uuid && (
+            <button
+              type="button"
+              onClick={toggleEva}
+              disabled={evaLoading}
+              className="flex items-center gap-2 px-3 py-2 rounded-lg text-sm font-semibold transition-colors"
+              style={{
+                background: evaEnabled ? '#ede9fe' : '#f3f4f6',
+                color: evaEnabled ? '#7c3aed' : '#6b7280',
+                border: `1px solid ${evaEnabled ? '#c4b5fd' : '#d1d5db'}`,
+              }}
+            >
+              <Zap size={14} />
+              EVA: {evaEnabled ? 'Permitido' : 'Bloqueado'}
+            </button>
+          )}
+          <button
+            type="button"
+            onClick={() => window.print()}
+            className="flex items-center gap-2 px-3 py-2 text-white
+                       rounded-lg text-sm transition-colors"
+            style={{ background: '#6a9e8a' }}
+          >
+            <Printer size={14} />
+            Imprimir
+          </button>
+        </div>
       </div>
 
       {/* ── Datos de la paciente ── */}
