@@ -90,6 +90,31 @@ const SessionDetail: React.FC<SessionDetailProps> = ({
   // ── CTG: todos los puntos de la sesión, para gráfico scrolleable ──────────
   const tocoR = readings.filter(r => r.sensor_type === SensorType.TOCODYNAMOMETER && r.contraction_intensity != null);
 
+  // Contar episodios de contracción (cruces de umbral con cooldown),
+  // igual que el backend — evita contar cada lectura individual como contracción
+  const contractionCount = (() => {
+    if (tocoR.length === 0) return 0;
+    const vals = tocoR.map(r => r.contraction_intensity as number);
+    const peak = Math.max(...vals);
+    const threshold = Math.max(5, peak * 0.25);
+    let count = 0, inC = false, lastEndTs: number | null = null;
+    const COOLDOWN_MS = 15_000;
+    for (const r of tocoR) {
+      const v = r.contraction_intensity as number;
+      const ts = new Date(r.timestamp).getTime();
+      if (!inC && v > threshold) {
+        if (lastEndTs === null || ts - lastEndTs >= COOLDOWN_MS) {
+          count++;
+          inC = true;
+        }
+      } else if (inC && v <= threshold * 0.5) {
+        inC = false;
+        lastEndTs = ts;
+      }
+    }
+    return count;
+  })();
+
   // Ancho dinámico: 3px por punto, mínimo 600px
   const ctgWidth = Math.max(600, Math.max(fhrR.length, tocoR.length) * 3);
   const hasCTG   = fhrR.length > 0 || tocoR.length > 0;
@@ -250,8 +275,8 @@ const SessionDetail: React.FC<SessionDetailProps> = ({
               </tr>
               <tr>
                 <td className="py-1.5" style={{ color: '#5a6272' }}>Contracciones detectadas</td>
-                <td className="text-center font-medium" style={{ color: '#2e3440' }}>{tocoR.length > 0 ? tocoR.length : '—'}</td>
-                <td className="text-center text-[#8e96a3]">{tocoR.length}</td>
+                <td className="text-center font-medium" style={{ color: '#2e3440' }}>{contractionCount > 0 ? contractionCount : '—'}</td>
+                <td className="text-center text-[#8e96a3]">{contractionCount}</td>
               </tr>
               <tr>
                 <td className="py-1.5" style={{ color: '#5a6272' }}>Percepción materna (botón)</td>
