@@ -27,11 +27,13 @@ class SessionEnd(BaseModel):
 
 class SessionResponse(SessionBase):
     id: int
+    session_uuid: Optional[str] = None
+    eva_enabled: Optional[bool] = False
     start_time: datetime
     end_time: Optional[datetime] = None
     duration_minutes: Optional[int] = None
     is_active: bool
-    
+
     class Config:
         from_attributes = True
 
