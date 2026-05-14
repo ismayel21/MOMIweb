@@ -9,6 +9,7 @@ import { useWebSocket } from '@/contexts/WebSocketContext';
 const FHR_COLOR  = '#E74C3C'; // rojo
 const TOCO_COLOR = '#3498DB'; // azul
 const BTN_COLOR  = '#F39C12'; // ámbar
+const EVA_COLOR  = '#6a9e8a'; // verde teal
 
 const WINDOW_MS  = 180_000; // ventana de 3 minutos (como tira CTG)
 const MAX_POINTS = 3000;    // máximo de puntos en memoria
@@ -36,6 +37,7 @@ interface PanelProps {
   bottomMargin?: number;
   hideXAxis?: boolean;
   buttonEvents?: BtnEvent[];
+  evaEvents?: EvaEvent[];
 }
 
 // Ticks del eje Y para FCF (cada 10 BPM, marcas gruesas cada 30)
@@ -47,7 +49,7 @@ const CTGPanel: React.FC<PanelProps> = ({
   data, dataKey, color, domain, yLabel, height,
   windowStart, windowEnd, tooltipSuffix,
   topMargin = 5, bottomMargin = 5, hideXAxis = false,
-  buttonEvents = [],
+  buttonEvents = [], evaEvents = [],
 }) => {
   const isFCF = domain[0] === 50;
   const yTicks = isFCF ? FCF_TICKS : TOCO_TICKS;
@@ -101,8 +103,7 @@ const CTGPanel: React.FC<PanelProps> = ({
 
       {/* Eventos de botón materno */}
       {buttonEvents.map((evt, i) => (
-        <React.Fragment key={i}>
-          {/* Área sombreada entre presión y suelta */}
+        <React.Fragment key={`btn-${i}`}>
           {evt.endTime != null && (
             <ReferenceArea
               x1={Math.max(evt.startTime, windowStart)}
@@ -116,20 +117,32 @@ const CTGPanel: React.FC<PanelProps> = ({
               }}
             />
           )}
-          {/* Línea sólida: inicio de pulsación */}
-          <ReferenceLine
-            x={evt.startTime}
-            stroke={BTN_COLOR}
-            strokeWidth={2}
-          />
-          {/* Línea discontinua: fin de pulsación */}
+          <ReferenceLine x={evt.startTime} stroke={BTN_COLOR} strokeWidth={2} />
           {evt.endTime != null && (
-            <ReferenceLine
-              x={evt.endTime}
-              stroke={BTN_COLOR}
-              strokeWidth={2}
-              strokeDasharray="6 3"
+            <ReferenceLine x={evt.endTime} stroke={BTN_COLOR} strokeWidth={2} strokeDasharray="6 3" />
+          )}
+        </React.Fragment>
+      ))}
+
+      {/* Eventos EVA (más discretos: área tenue + línea delgada punteada) */}
+      {evaEvents.map((evt, i) => (
+        <React.Fragment key={`eva-${i}`}>
+          {evt.endTime != null && (
+            <ReferenceArea
+              x1={Math.max(evt.startTime, windowStart)}
+              x2={Math.min(evt.endTime, windowEnd)}
+              fill={EVA_COLOR}
+              fillOpacity={0.08}
+              label={{
+                value: 'EVA',
+                position: 'insideTopLeft',
+                style: { fontSize: 8, fill: EVA_COLOR },
+              }}
             />
+          )}
+          <ReferenceLine x={evt.startTime} stroke={EVA_COLOR} strokeWidth={1} strokeDasharray="4 3" />
+          {evt.endTime != null && (
+            <ReferenceLine x={evt.endTime} stroke={EVA_COLOR} strokeWidth={1} strokeDasharray="2 3" />
           )}
         </React.Fragment>
       ))}
@@ -153,22 +166,29 @@ export interface BtnEvent {
   endTime?: number;
 }
 
+export interface EvaEvent {
+  startTime: number;
+  endTime?: number;
+}
+
 interface CTGChartProps {
   /** Si se proveen, se usan en lugar del WebSocket de sesión (modo calibración) */
   externalFhrData?:      DataPoint[];
   externalTocoData?:     DataPoint[];
   externalButtonEvents?: BtnEvent[];
+  externalEvaEvents?:    EvaEvent[];
 }
 
 // ── CTGChart principal ───────────────────────────────────────────────────────
 export const CTGChart: React.FC<CTGChartProps> = ({
-  externalFhrData, externalTocoData, externalButtonEvents,
+  externalFhrData, externalTocoData, externalButtonEvents, externalEvaEvents,
 }) => {
   const { latestReading, latestButtonEvent } = useWebSocket();
 
-  const [internalFhr,      setInternalFhr]      = useState<DataPoint[]>([]);
-  const [internalToco,     setInternalToco]     = useState<DataPoint[]>([]);
+  const [internalFhr,       setInternalFhr]       = useState<DataPoint[]>([]);
+  const [internalToco,      setInternalToco]      = useState<DataPoint[]>([]);
   const [internalBtnEvents, setInternalBtnEvents] = useState<BtnEvent[]>([]);
+  const [internalEvaEvents, setInternalEvaEvents] = useState<EvaEvent[]>([]);
 
   // Acumular lecturas FCF desde WS de sesión (solo si no hay datos externos)
   useEffect(() => {
@@ -194,30 +214,38 @@ export const CTGChart: React.FC<CTGChartProps> = ({
     }
   }, [latestReading, externalTocoData]);
 
-  // Gestionar botón materno desde WS de sesión (solo si no hay datos externos)
+  // Gestionar botón materno y EVA desde WS de sesión (solo si no hay datos externos)
   useEffect(() => {
-    if (externalButtonEvents != null) return;
     if (!latestButtonEvent) return;
     const now = Date.now();
-    if (latestButtonEvent.event === 'Boton_Presionado') {
+
+    if (latestButtonEvent.event === 'Boton_Presionado' && externalButtonEvents == null) {
       setInternalBtnEvents(prev => [...prev, { startTime: now }]);
-    } else if (latestButtonEvent.event === 'Boton_Soltado') {
+    } else if (latestButtonEvent.event === 'Boton_Soltado' && externalButtonEvents == null) {
       setInternalBtnEvents(prev => {
         const copy = [...prev];
         for (let i = copy.length - 1; i >= 0; i--) {
-          if (copy[i].endTime == null) {
-            copy[i] = { ...copy[i], endTime: now };
-            break;
-          }
+          if (copy[i].endTime == null) { copy[i] = { ...copy[i], endTime: now }; break; }
+        }
+        return copy;
+      });
+    } else if (latestButtonEvent.event === 'EVA_START' && externalEvaEvents == null) {
+      setInternalEvaEvents(prev => [...prev, { startTime: now }]);
+    } else if (latestButtonEvent.event === 'EVA_STOP' && externalEvaEvents == null) {
+      setInternalEvaEvents(prev => {
+        const copy = [...prev];
+        for (let i = copy.length - 1; i >= 0; i--) {
+          if (copy[i].endTime == null) { copy[i] = { ...copy[i], endTime: now }; break; }
         }
         return copy;
       });
     }
-  }, [latestButtonEvent, externalButtonEvents]);
+  }, [latestButtonEvent, externalButtonEvents, externalEvaEvents]);
 
-  const fhrData  = externalFhrData      ?? internalFhr;
-  const tocoData = externalTocoData     ?? internalToco;
+  const fhrData   = externalFhrData      ?? internalFhr;
+  const tocoData  = externalTocoData     ?? internalToco;
   const btnEvents = externalButtonEvents ?? internalBtnEvents;
+  const evaEvents = externalEvaEvents    ?? internalEvaEvents;
 
   const now = Date.now();
   const windowStart = now - WINDOW_MS;
@@ -226,6 +254,9 @@ export const CTGChart: React.FC<CTGChartProps> = ({
   const fhrVisible  = fhrData.filter(d => d.t >= windowStart);
   const tocoVisible = tocoData.filter(d => d.t >= windowStart);
   const evtVisible  = btnEvents.filter(
+    e => e.startTime >= windowStart || (e.endTime != null && e.endTime >= windowStart),
+  );
+  const evaVisible  = evaEvents.filter(
     e => e.startTime >= windowStart || (e.endTime != null && e.endTime >= windowStart),
   );
 
@@ -257,9 +288,11 @@ export const CTGChart: React.FC<CTGChartProps> = ({
             topMargin={5}
             bottomMargin={0}
             hideXAxis
+            buttonEvents={evtVisible}
+            evaEvents={evaVisible}
           />
 
-          {/* Panel inferior — Toco + botón materno */}
+          {/* Panel inferior — Toco + botón materno + EVA */}
           <CTGPanel
             data={tocoVisible}
             dataKey="Toco"
@@ -273,37 +306,34 @@ export const CTGChart: React.FC<CTGChartProps> = ({
             topMargin={0}
             bottomMargin={5}
             buttonEvents={evtVisible}
+            evaEvents={evaVisible}
           />
         </div>
       )}
 
-      {/* Leyenda de botón materno */}
-      {evtVisible.length > 0 && (
-        <div className="flex items-center gap-4 mt-2 text-xs text-[#8e96a3]">
-          <span className="flex items-center gap-1">
-            <span
-              style={{ display: 'inline-block', width: 16, height: 2, background: BTN_COLOR }}
-            />
-            Inicio pulsación
-          </span>
-          <span className="flex items-center gap-1">
-            <span
-              style={{
-                display: 'inline-block', width: 16, height: 2,
-                background: BTN_COLOR, borderTop: `2px dashed ${BTN_COLOR}`,
-              }}
-            />
-            Fin pulsación
-          </span>
-          <span className="flex items-center gap-1">
-            <span
-              style={{
-                display: 'inline-block', width: 16, height: 10,
-                background: BTN_COLOR, opacity: 0.2,
-              }}
-            />
-            Duración
-          </span>
+      {/* Leyendas */}
+      {(evtVisible.length > 0 || evaVisible.length > 0) && (
+        <div className="flex flex-wrap items-center gap-4 mt-2 text-xs text-[#8e96a3]">
+          {evtVisible.length > 0 && (<>
+            <span className="flex items-center gap-1">
+              <span style={{ display: 'inline-block', width: 16, height: 2, background: BTN_COLOR }} />
+              Botón materno
+            </span>
+            <span className="flex items-center gap-1">
+              <span style={{ display: 'inline-block', width: 16, height: 10, background: BTN_COLOR, opacity: 0.2 }} />
+              Duración
+            </span>
+          </>)}
+          {evaVisible.length > 0 && (<>
+            <span className="flex items-center gap-1">
+              <span style={{ display: 'inline-block', width: 16, height: 0, borderTop: `1px dashed ${EVA_COLOR}` }} />
+              EVA inicio/fin
+            </span>
+            <span className="flex items-center gap-1">
+              <span style={{ display: 'inline-block', width: 16, height: 10, background: EVA_COLOR, opacity: 0.15 }} />
+              EVA duración
+            </span>
+          </>)}
         </div>
       )}
     </div>

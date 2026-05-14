@@ -15,7 +15,7 @@ export interface AIPrediction {
 }
 
 export interface ButtonEvent {
-  event: 'Boton_Presionado' | 'Boton_Soltado';
+  event: 'Boton_Presionado' | 'Boton_Soltado' | 'EVA_START' | 'EVA_STOP';
   patient_id: number;
   timestamp: string;
 }

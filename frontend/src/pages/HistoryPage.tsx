@@ -136,29 +136,29 @@ const SessionDetail: React.FC<SessionDetailProps> = ({
   }
   if (currentPress != null) btnPairs.push({ startMs: currentPress });
 
-  // Dominio X compartido: cubre readings Y eventos de botón para que las marcas
-  // siempre queden dentro del rango visible aunque no coincidan con ningún dato
+  // Parear eventos EVA (START + STOP) — ms para gráficos, string para tabla
+  interface EvaPair { startMs: number; endMs?: number; }
+  const evaPairs: EvaPair[] = [];
+  let currentEvaStart: number | null = null;
+  for (const ev of events) {
+    if (ev.event_type === 'EVA_START') {
+      currentEvaStart = new Date(ev.timestamp).getTime();
+    } else if (ev.event_type === 'EVA_STOP' && currentEvaStart != null) {
+      evaPairs.push({ startMs: currentEvaStart, endMs: new Date(ev.timestamp).getTime() });
+      currentEvaStart = null;
+    }
+  }
+  if (currentEvaStart != null) evaPairs.push({ startMs: currentEvaStart });
+
+  // Dominio X compartido: cubre readings + botón + EVA
   const allCtgMs = [
     ...fhrR.map(r  => new Date(r.timestamp).getTime()),
     ...tocoR.map(r => new Date(r.timestamp).getTime()),
     ...btnPairs.flatMap(p => p.endMs != null ? [p.startMs, p.endMs] : [p.startMs]),
+    ...evaPairs.flatMap(p => p.endMs != null ? [p.startMs, p.endMs] : [p.startMs]),
   ];
   const ctgXMin = allCtgMs.length ? Math.min(...allCtgMs) : Date.now() - 60_000;
   const ctgXMax = allCtgMs.length ? Math.max(...allCtgMs) : Date.now();
-
-  // Parear eventos EVA (START + STOP) — solo para mostrar tabla de tiempos
-  interface EvaPair { startTime: string; endTime?: string; }
-  const evaPairs: EvaPair[] = [];
-  let currentEvaStart: string | null = null;
-  for (const ev of events) {
-    if (ev.event_type === 'EVA_START') {
-      currentEvaStart = ev.timestamp;
-    } else if (ev.event_type === 'EVA_STOP' && currentEvaStart) {
-      evaPairs.push({ startTime: currentEvaStart, endTime: ev.timestamp });
-      currentEvaStart = null;
-    }
-  }
-  if (currentEvaStart) evaPairs.push({ startTime: currentEvaStart });
 
   return (
     <div>
@@ -325,19 +325,17 @@ const SessionDetail: React.FC<SessionDetailProps> = ({
             </thead>
             <tbody className="divide-y divide-[#f4f1ec]">
               {evaPairs.map((pair, i) => {
-                const durS = pair.endTime
-                  ? Math.round(
-                      (new Date(pair.endTime).getTime() - new Date(pair.startTime).getTime()) / 1000
-                    )
+                const durS = pair.endMs != null
+                  ? Math.round((pair.endMs - pair.startMs) / 1000)
                   : null;
                 return (
                   <tr key={i}>
                     <td className="py-1.5 text-[#8e96a3]">{i + 1}</td>
                     <td className="py-1.5 font-medium" style={{ color: '#2e3440' }}>
-                      {fmtDateTime(pair.startTime)}
+                      {format(new Date(pair.startMs), 'dd/MM/yyyy HH:mm:ss')}
                     </td>
                     <td className="py-1.5" style={{ color: '#8e96a3' }}>
-                      {pair.endTime ? fmtDateTime(pair.endTime) : '—'}
+                      {pair.endMs != null ? format(new Date(pair.endMs), 'dd/MM/yyyy HH:mm:ss') : '—'}
                     </td>
                     <td className="py-1.5 text-right" style={{ color: '#8e96a3' }}>
                       {durS != null
@@ -453,6 +451,18 @@ const SessionDetail: React.FC<SessionDetailProps> = ({
                           ? <ReferenceLine key={`fe-${i}`} x={pair.endMs}
                               stroke={BTN_COLOR} strokeWidth={2} strokeDasharray="5 3" /> : null,
                       ])}
+                      {evaPairs.flatMap((pair, i) => [
+                        pair.endMs != null
+                          ? <ReferenceArea key={`fea-${i}`} x1={pair.startMs} x2={pair.endMs}
+                              fill="#6a9e8a" fillOpacity={0.08}
+                              label={{ value: 'EVA', position: 'insideTopLeft',
+                                style: { fontSize: 8, fill: '#6a9e8a' } }} /> : null,
+                        <ReferenceLine key={`fes-${i}`} x={pair.startMs}
+                          stroke="#6a9e8a" strokeWidth={1} strokeDasharray="4 3" />,
+                        pair.endMs != null
+                          ? <ReferenceLine key={`fee-${i}`} x={pair.endMs}
+                              stroke="#6a9e8a" strokeWidth={1} strokeDasharray="2 3" /> : null,
+                      ])}
                       <Line type="monotone" dataKey="FCF" stroke="#E74C3C"
                         strokeWidth={1.5} dot={false} isAnimationActive={false} connectNulls={false} />
                     </ComposedChart>
@@ -494,6 +504,18 @@ const SessionDetail: React.FC<SessionDetailProps> = ({
                           ? <ReferenceLine key={`te-${i}`} x={pair.endMs}
                               stroke={BTN_COLOR} strokeWidth={2} strokeDasharray="5 3" /> : null,
                       ])}
+                      {evaPairs.flatMap((pair, i) => [
+                        pair.endMs != null
+                          ? <ReferenceArea key={`tea-${i}`} x1={pair.startMs} x2={pair.endMs}
+                              fill="#6a9e8a" fillOpacity={0.08}
+                              label={{ value: 'EVA', position: 'insideTopLeft',
+                                style: { fontSize: 8, fill: '#6a9e8a' } }} /> : null,
+                        <ReferenceLine key={`tes-${i}`} x={pair.startMs}
+                          stroke="#6a9e8a" strokeWidth={1} strokeDasharray="4 3" />,
+                        pair.endMs != null
+                          ? <ReferenceLine key={`tee-${i}`} x={pair.endMs}
+                              stroke="#6a9e8a" strokeWidth={1} strokeDasharray="2 3" /> : null,
+                      ])}
                       <Line type="monotone" dataKey="Toco" stroke="#3498DB"
                         strokeWidth={1.5} dot={false} isAnimationActive={false} connectNulls={false} />
                     </ComposedChart>
@@ -501,21 +523,29 @@ const SessionDetail: React.FC<SessionDetailProps> = ({
                 )}
               </div>
 
-              {/* Leyenda del botón */}
-              {btnPairs.length > 0 && (
-                <div className="flex items-center gap-4 mt-2 text-xs text-gray-500">
-                  <span className="flex items-center gap-1">
-                    <span style={{ display: 'inline-block', width: 14, height: 2, background: BTN_COLOR }} />
-                    Inicio pulsación
-                  </span>
-                  <span className="flex items-center gap-1">
-                    <span style={{ display: 'inline-block', width: 14, height: 0, borderTop: `2px dashed ${BTN_COLOR}` }} />
-                    Fin pulsación
-                  </span>
-                  <span className="flex items-center gap-1">
-                    <span style={{ display: 'inline-block', width: 14, height: 10, background: BTN_COLOR, opacity: 0.2 }} />
-                    Duración
-                  </span>
+              {/* Leyenda */}
+              {(btnPairs.length > 0 || evaPairs.length > 0) && (
+                <div className="flex flex-wrap items-center gap-4 mt-2 text-xs text-gray-500">
+                  {btnPairs.length > 0 && (<>
+                    <span className="flex items-center gap-1">
+                      <span style={{ display: 'inline-block', width: 14, height: 2, background: BTN_COLOR }} />
+                      Botón materno
+                    </span>
+                    <span className="flex items-center gap-1">
+                      <span style={{ display: 'inline-block', width: 14, height: 10, background: BTN_COLOR, opacity: 0.2 }} />
+                      Duración
+                    </span>
+                  </>)}
+                  {evaPairs.length > 0 && (<>
+                    <span className="flex items-center gap-1">
+                      <span style={{ display: 'inline-block', width: 14, height: 0, borderTop: '1px dashed #6a9e8a' }} />
+                      EVA inicio/fin
+                    </span>
+                    <span className="flex items-center gap-1">
+                      <span style={{ display: 'inline-block', width: 14, height: 10, background: '#6a9e8a', opacity: 0.15 }} />
+                      EVA duración
+                    </span>
+                  </>)}
                 </div>
               )}
             </div>

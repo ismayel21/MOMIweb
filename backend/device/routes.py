@@ -300,14 +300,15 @@ class ButtonEventRequest(BaseModel):
 
 
 @router.post("/sessions/{session_uuid}/button", status_code=201)
-def push_button_event(
+async def push_button_event(
     session_uuid: str,
     body: ButtonEventRequest,
     db: Session = Depends(get_db),
 ):
     """
-    Registra un evento de percepción materna.
+    Registra un evento de percepción materna o EVA.
     Se almacena en la tabla events y aparece como marca temporal en el CTG del historial.
+    EVA_START / EVA_STOP también se transmiten por WebSocket para el dashboard en vivo.
     """
     session = db.query(MonitoringSession).filter(
         MonitoringSession.session_uuid == session_uuid
@@ -333,6 +334,15 @@ def push_button_event(
     )
     db.add(event)
     db.commit()
+
+    # Retransmitir EVA por WebSocket para que el CTG en vivo muestre las marcas
+    if body.event_type in ("EVA_START", "EVA_STOP"):
+        from realtime.websocket import send_button_event
+        await send_button_event(session.patient_id, {
+            "event": body.event_type,
+            "patient_id": session.patient_id,
+            "timestamp": ts.isoformat(),
+        })
 
     return {"ok": True, "event_id": event.id}
 
