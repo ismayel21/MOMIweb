@@ -54,15 +54,16 @@ const SessionDetail: React.FC<SessionDetailProps> = ({
   const [evaLoading, setEvaLoading] = React.useState(false);
 
   const toggleEva = async () => {
-    if (!session.session_uuid) return;
     setEvaLoading(true);
     try {
-      const res = await fetch(`/api/device/sessions/${session.session_uuid}/eva`, {
+      const res = await fetch(`/api/sessions/${session.id}/eva`, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ enabled: !evaEnabled }),
       });
-      if (res.ok) setEvaEnabled(e => !e);
+      if (res.ok) {
+        const data = await res.json();
+        setEvaEnabled(data.eva_enabled);
+      }
     } finally {
       setEvaLoading(false);
     }
@@ -153,7 +154,7 @@ const SessionDetail: React.FC<SessionDetailProps> = ({
           )}
         </h3>
         <div className="flex items-center gap-2">
-          {session.is_active && session.session_uuid && (
+          {session.is_active && (
             <button
               type="button"
               onClick={toggleEva}

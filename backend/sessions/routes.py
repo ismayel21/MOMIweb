@@ -262,3 +262,21 @@ async def end_session(
     db.refresh(session)
     
     return session
+
+
+# ═══════════════════════════════════════════════════════════
+# PATCH /sessions/{id}/eva — Activar/desactivar EVA desde la web
+# ═══════════════════════════════════════════════════════════
+
+@router.patch("/{session_id}/eva")
+async def set_session_eva(
+    session_id: int,
+    db: Session = Depends(get_db),
+    current_doctor: Doctor = Depends(get_current_doctor),
+):
+    session = db.query(MonitoringSession).filter(MonitoringSession.id == session_id).first()
+    if not session:
+        raise HTTPException(status_code=404, detail="Session not found")
+    session.eva_enabled = not (session.eva_enabled or False)
+    db.commit()
+    return {"ok": True, "eva_enabled": session.eva_enabled}
