@@ -10,6 +10,7 @@ import {
   ArrowLeft, Printer, Calendar, User, Clock,
   Activity, ChevronRight, Filter, FileText, Zap,
 } from 'lucide-react';
+import { api } from '@/api/axios';
 import { patientsAPI } from '@/api/patients';
 import { sessionsAPI } from '@/api/sessions';
 import { readingsAPI } from '@/api/readings';
@@ -56,14 +57,8 @@ const SessionDetail: React.FC<SessionDetailProps> = ({
   const toggleEva = async () => {
     setEvaLoading(true);
     try {
-      const res = await fetch(`/api/sessions/${session.id}/eva`, {
-        method: 'PATCH',
-        headers: { 'Content-Type': 'application/json' },
-      });
-      if (res.ok) {
-        const data = await res.json();
-        setEvaEnabled(data.eva_enabled);
-      }
+      const { data } = await api.patch(`/sessions/${session.id}/eva`);
+      setEvaEnabled(data.eva_enabled);
     } finally {
       setEvaLoading(false);
     }

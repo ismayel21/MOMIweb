@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { sessionsAPI } from '@/api/sessions';
+import { api } from '@/api/axios';
 import { Zap } from 'lucide-react';
 
 export const EvaControl: React.FC = () => {
@@ -19,13 +20,8 @@ export const EvaControl: React.FC = () => {
     if (!activeSession?.id || loading) return;
     setLoading(true);
     try {
-      const res = await fetch(`/api/sessions/${activeSession.id}/eva`, {
-        method: 'PATCH',
-        headers: { 'Content-Type': 'application/json' },
-      });
-      if (res.ok) {
-        queryClient.invalidateQueries({ queryKey: ['activeSession'] });
-      }
+      await api.patch(`/sessions/${activeSession.id}/eva`);
+      queryClient.invalidateQueries({ queryKey: ['activeSession'] });
     } finally {
       setLoading(false);
     }
