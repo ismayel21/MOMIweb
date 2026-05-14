@@ -104,14 +104,15 @@ export const PatientSelector: React.FC = () => {
     refetchInterval: 5000,
   });
 
-  // Conectar WebSocket cuando hay sesión activa
+  // Conectar WebSocket cuando hay sesión activa; desconectar al salir del dashboard
   useEffect(() => {
     if (activeSession?.patient_id) {
       connect(activeSession.patient_id);
     } else {
       disconnect();
     }
-  }, [activeSession?.patient_id]);
+    return () => { disconnect(); };
+  }, [activeSession?.patient_id, connect, disconnect]);
 
   // Mutation para iniciar sesión
   const startSessionMutation = useMutation({
