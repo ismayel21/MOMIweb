@@ -8,7 +8,7 @@ import {
 import { format } from 'date-fns';
 import {
   ArrowLeft, Printer, Calendar, User, Clock,
-  Activity, ChevronRight, Filter, FileText, Zap,
+  Activity, ChevronRight, Filter, FileText, Zap, Download,
 } from 'lucide-react';
 import { api } from '@/api/axios';
 import { patientsAPI } from '@/api/patients';
@@ -46,10 +46,8 @@ interface SessionDetailProps {
   isLoading: boolean;
 }
 
-const BTN_COLOR  = '#F39C12';
-const EVA_COLOR  = '#6a9e8a';
-const PRINT_W    = 680;          // px — cabe en A4 portrait con margen 1.5 cm
-const PRINT_SEG  = 5 * 60_000;  // ms por segmento CTG impreso
+const BTN_COLOR = '#F39C12';
+const EVA_COLOR = '#6a9e8a';
 
 const SessionDetail: React.FC<SessionDetailProps> = ({
   session, patient, readings, events, isLoading,
@@ -164,55 +162,146 @@ const SessionDetail: React.FC<SessionDetailProps> = ({
   const ctgXMin = allCtgMs.length ? Math.min(...allCtgMs) : Date.now() - 60_000;
   const ctgXMax = allCtgMs.length ? Math.max(...allCtgMs) : Date.now();
 
-  // ── Segmentos CTG para impresión (5 min c/u) ──────────────────────────────
-  interface PrintSeg {
-    t: number; segEnd: number;
-    fhrSeg: { t: number; FCF: number | undefined }[];
-    tocoSeg: { t: number; Toco: number | null | undefined }[];
-    btnSeg: BtnPair[];
-    evaSeg: EvaPair[];
-  }
-  const printSegments: PrintSeg[] = [];
-  if (hasCTG) {
-    for (let t = ctgXMin; t < ctgXMax; t += PRINT_SEG) {
-      const segEnd = Math.min(t + PRINT_SEG, ctgXMax);
-      const fhrSeg  = fhrR
-        .filter(r => { const ms = new Date(r.timestamp).getTime(); return ms >= t && ms <= segEnd; })
-        .map(r => ({ t: new Date(r.timestamp).getTime(), FCF: r.heart_rate }));
-      const tocoSeg = tocoR
-        .filter(r => { const ms = new Date(r.timestamp).getTime(); return ms >= t && ms <= segEnd; })
-        .map(r => ({ t: new Date(r.timestamp).getTime(), Toco: r.contraction_intensity }));
-      if (fhrSeg.length === 0 && tocoSeg.length === 0) continue;
-      printSegments.push({
-        t, segEnd, fhrSeg, tocoSeg,
-        btnSeg: btnPairs.filter(p => p.startMs <= segEnd && (p.endMs ?? p.startMs) >= t),
-        evaSeg: evaPairs.filter(p => p.startMs <= segEnd && (p.endMs ?? p.startMs) >= t),
-      });
-    }
-  }
+  // ── Imprimir via popup con SVGs ya renderizados ───────────────────────────
+  const handlePrint = () => {
+    const chartSection = document.getElementById('momi-screen-charts');
+    const svgEls = chartSection
+      ? Array.from(chartSection.querySelectorAll<SVGSVGElement>('.recharts-wrapper svg'))
+      : [];
 
-  // Datos SpO₂ y PA para gráficos de impresión (sesión completa, sin slice)
-  const spo2PrintData = readings
-    .filter(r => r.sensor_type === SensorType.SPO2)
-    .map(r => ({ t: new Date(r.timestamp).getTime(), SpO2: r.spo2, FCM: r.heart_rate }));
-  const bpPrintData = bpR
-    .map(r => ({ t: new Date(r.timestamp).getTime(), Sis: r.systolic_bp, Dia: r.diastolic_bp }));
+    const chartLabels = [
+      'FC Fetal — bpm',
+      'SpO₂ y FC Materna',
+      'Presión Arterial — mmHg',
+      'Cardiotocografía — FCF (bpm)',
+      'Cardiotocografía — Toco',
+    ];
+
+    const svgBlocksHtml = svgEls.map((svg, i) => {
+      const serialized = new XMLSerializer().serializeToString(svg);
+      const dataUrl = `data:image/svg+xml,${encodeURIComponent(serialized)}`;
+      const label = chartLabels[i] ?? `Gráfico ${i + 1}`;
+      return `<div style="break-inside:avoid;margin:0 0 14px">
+        <p style="font-size:10px;font-weight:600;color:#5a6272;margin:0 0 3px">${label}</p>
+        <img src="${dataUrl}" style="width:100%;max-width:700px;display:block" />
+      </div>`;
+    }).join('');
+
+    const statsHtml = [
+      ['SpO₂ Materna',            avgSpO2 != null ? `${avgSpO2} %` : '—',                             spo2R.length],
+      ['FC Materna',               avgHR   != null ? `${avgHR} bpm`  : '—',                            hrR.length],
+      ['Presión Arterial',         avgSys  != null ? `${avgSys}/${avgDia ?? '?'} mmHg` : '—',          bpR.length],
+      ['FC Fetal (Doppler)',        avgFHR  != null ? `${avgFHR} bpm` : '—',                            fhrR.length],
+      ['Contracciones detectadas',  contractionCount > 0 ? String(contractionCount) : '—',             contractionCount],
+      ['Botón materno',             btnPairs.length > 0 ? `${btnPairs.length}` : '—',                  btnPairs.length],
+      ['Estimulación EVA',          evaPairs.length > 0 ? `${evaPairs.length}` : '—',                  evaPairs.length],
+    ].map(([p, v, n]) =>
+      `<tr><td>${p}</td><td><b>${v}</b></td><td style="text-align:center">${n}</td></tr>`,
+    ).join('');
+
+    const evaTableHtml = evaPairs.length > 0 ? `
+      <h2>Estimulación Vibroacústica (EVA)</h2>
+      <table>
+        <tr><th>#</th><th>Inicio</th><th>Fin</th><th>Duración</th></tr>
+        ${evaPairs.map((p, i) => {
+          const s = p.endMs != null ? Math.round((p.endMs - p.startMs) / 1000) : null;
+          const d = s != null ? (s >= 60 ? `${Math.floor(s / 60)}m ${s % 60}s` : `${s}s`) : '—';
+          return `<tr>
+            <td>${i + 1}</td>
+            <td>${format(new Date(p.startMs), 'dd/MM/yyyy HH:mm:ss')}</td>
+            <td>${p.endMs != null ? format(new Date(p.endMs), 'dd/MM/yyyy HH:mm:ss') : '—'}</td>
+            <td>${d}</td>
+          </tr>`;
+        }).join('')}
+      </table>` : '';
+
+    const html = `<!DOCTYPE html>
+<html lang="es">
+<head><meta charset="utf-8">
+<title>MOMI — Sesión #${session.id}</title>
+<style>
+  @page { size: A4 portrait; margin: 1.5cm }
+  * { box-sizing: border-box }
+  body { font-family: Arial, sans-serif; font-size: 11px; color: #2e3440; margin: 0 }
+  h1  { font-size: 17px; color: #6a9e8a; margin: 0 0 2px }
+  h2  { font-size: 10px; color: #5a6272; margin: 10px 0 3px; border-bottom: 1px solid #e8e2d9; padding-bottom: 2px; text-transform: uppercase; letter-spacing: .5px }
+  table { width: 100%; border-collapse: collapse; margin-bottom: 8px; font-size: 10px }
+  th, td { padding: 3px 6px; border: 1px solid #e8e2d9 }
+  th { background: #f4f1ec; font-weight: 600; text-align: left }
+  .hdr { display: flex; justify-content: space-between; margin-bottom: 10px; padding-bottom: 8px; border-bottom: 2px solid #6a9e8a }
+  .meta { font-size: 9px; color: #8e96a3 }
+</style>
+</head>
+<body>
+<div class="hdr">
+  <div>
+    <h1>MOMI — Sesión #${session.id}</h1>
+    <p class="meta">Sistema de Monitoreo Materno Inteligente</p>
+  </div>
+  <div class="meta" style="text-align:right">
+    <p>Impreso: ${format(new Date(), 'dd/MM/yyyy HH:mm')}</p>
+    ${session.is_active ? '<p style="color:#16a34a;font-weight:bold">● SESIÓN EN CURSO</p>' : ''}
+  </div>
+</div>
+${patient ? `<h2>Paciente</h2>
+<table><tr><th>Nombre</th><th>N° Historia Clínica</th></tr>
+<tr><td><b>${patient.first_name} ${patient.last_name}</b></td><td>${patient.medical_record_number ?? '—'}</td></tr></table>` : ''}
+<h2>Resumen de sesión</h2>
+<table>
+  <tr><th>Inicio</th><th>Fin</th><th>Duración</th><th>Total lecturas</th></tr>
+  <tr><td>${fmtDateTime(session.start_time)}</td><td>${session.end_time ? fmtDateTime(session.end_time) : '—'}</td><td>${formatDuration(session.duration_minutes)}</td><td>${readings.length}</td></tr>
+</table>
+${session.notes ? `<p style="font-style:italic;color:#8e96a3;font-size:10px;margin:0 0 8px">"${session.notes}"</p>` : ''}
+<h2>Signos vitales</h2>
+<table><tr><th>Parámetro</th><th>Promedio</th><th>Lecturas</th></tr>${statsHtml}</table>
+${evaTableHtml}
+${svgBlocksHtml ? `<h2 style="break-before:page">Gráficos de la sesión</h2>${svgBlocksHtml}` : ''}
+</body></html>`;
+
+    const win = window.open('', '_blank', 'width=900,height=700');
+    if (!win) {
+      window.print();
+      return;
+    }
+    win.document.open();
+    win.document.write(html);
+    win.document.close();
+    win.focus();
+    setTimeout(() => win.print(), 500);
+  };
+
+  // ── Exportar CSV ──────────────────────────────────────────────────────────
+  const handleExportCSV = () => {
+    const header = ['Timestamp', 'Tipo_Sensor', 'FCF_bpm', 'SpO2_pct', 'FC_Materna_bpm', 'PA_Sis_mmHg', 'PA_Dia_mmHg', 'Toco'];
+    const dataRows = readings.map(r => [
+      r.timestamp,
+      r.sensor_type,
+      r.sensor_type === SensorType.FETAL_DOPPLER ? (r.heart_rate ?? '') : '',
+      r.spo2 ?? '',
+      r.sensor_type === SensorType.SPO2 ? (r.heart_rate ?? '') : '',
+      r.systolic_bp ?? '',
+      r.diastolic_bp ?? '',
+      r.contraction_intensity ?? '',
+    ]);
+    const csv = [header, ...dataRows]
+      .map(row => row.map(c => `"${String(c).replace(/"/g, '""')}"`).join(','))
+      .join('\n');
+    const blob = new Blob(['﻿' + csv], { type: 'text/csv;charset=utf-8' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    const name = patient
+      ? `${patient.first_name}_${patient.last_name}`.replace(/\s+/g, '_')
+      : `paciente${session.patient_id}`;
+    a.download = `MOMI_sesion${session.id}_${name}_${format(new Date(session.start_time), 'yyyyMMdd_HHmm')}.csv`;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+  };
 
   return (
     <div>
-      {/* ── Cabecera solo para impresión ── */}
-      <div className="hidden print:block mb-6 pb-4 border-b-2 border-[#6a9e8a]">
-        <div className="flex justify-between items-start">
-          <div>
-            <h1 className="text-2xl font-bold" style={{ color: '#6a9e8a' }}>MOMI — Reporte de Sesión</h1>
-            <p className="text-sm" style={{ color: '#8e96a3' }}>Sistema de Monitoreo Materno Inteligente</p>
-          </div>
-          <div className="text-right text-sm" style={{ color: '#8e96a3' }}>
-            <p>Impreso: {format(new Date(), 'dd/MM/yyyy HH:mm')}</p>
-          </div>
-        </div>
-      </div>
-
       {/* ── Header con botón imprimir (solo pantalla) ── */}
       <div className="flex items-center justify-between mb-4 print:hidden">
         <h3 className="text-lg font-bold flex items-center gap-2" style={{ color: '#2e3440' }}>
@@ -224,15 +313,26 @@ const SessionDetail: React.FC<SessionDetailProps> = ({
           )}
         </h3>
         <div className="flex items-center gap-2">
+          {readings.length > 0 && (
+            <button
+              type="button"
+              onClick={handleExportCSV}
+              className="flex items-center gap-2 px-3 py-2 rounded-lg text-sm transition-colors border"
+              style={{ color: '#6a9e8a', borderColor: '#6a9e8a', background: 'white' }}
+            >
+              <Download size={14} />
+              CSV
+            </button>
+          )}
           <button
             type="button"
-            onClick={() => window.print()}
+            onClick={handlePrint}
             className="flex items-center gap-2 px-3 py-2 text-white
                        rounded-lg text-sm transition-colors"
             style={{ background: '#6a9e8a' }}
           >
             <Printer size={14} />
-            Imprimir
+            Imprimir / PDF
           </button>
         </div>
       </div>
@@ -392,7 +492,7 @@ const SessionDetail: React.FC<SessionDetailProps> = ({
 
       {/* ── Gráficos interactivos (ocultos al imprimir) ── */}
       {!isLoading && hasCharts && (
-        <div className="space-y-4 print:hidden">
+        <div id="momi-screen-charts" className="space-y-4 print:hidden">
           {fhrChart.length > 0 && (
             <div className="bg-white border border-[#e8e2d9] rounded-xl p-4">
               <p className="text-sm font-semibold mb-3" style={{ color: '#5a6272' }}>FC Fetal — bpm</p>
@@ -591,172 +691,6 @@ const SessionDetail: React.FC<SessionDetailProps> = ({
         </div>
       )}
 
-      {/* ════════════════════════════════════════════════════════
-           SECCIÓN SOLO PARA IMPRESIÓN — gráficos completos
-          ════════════════════════════════════════════════════════ */}
-      {!isLoading && (spo2PrintData.length > 0 || bpPrintData.length > 0 || printSegments.length > 0) && (
-        <div className="hidden print:block">
-          {/* Regla de página A4 portrait con margen 1.5 cm */}
-          <style>{`@media print{@page{size:A4 portrait;margin:1.5cm}}`}</style>
-
-          {/* ── SpO₂ y FC Materna ── */}
-          {spo2PrintData.length > 0 && (
-            <div style={{ breakInside: 'avoid', marginBottom: 16 }}>
-              <p style={{ fontSize: 10, fontWeight: 600, color: '#5a6272', marginBottom: 4 }}>
-                SpO₂ y FC Materna — sesión completa
-              </p>
-              <ComposedChart width={PRINT_W} height={110} data={spo2PrintData}
-                margin={{ top: 4, right: 8, bottom: 4, left: 0 }}>
-                <CartesianGrid stroke="#e8e2d9" strokeWidth={0.5} />
-                <XAxis dataKey="t" type="number" scale="time"
-                  domain={[spo2PrintData[0].t, spo2PrintData[spo2PrintData.length - 1].t]}
-                  tickFormatter={(t: number) => format(new Date(t), 'HH:mm')}
-                  tick={{ fontSize: 8 }} />
-                <YAxis yAxisId="spo2" domain={[80, 100]} tick={{ fontSize: 8 }} width={28}
-                  label={{ value: 'SpO₂ %', angle: -90, position: 'insideLeft', style: { fontSize: 8, fill: '#6a9e8a' } }} />
-                <YAxis yAxisId="hr" orientation="right" domain={[40, 160]} tick={{ fontSize: 8 }} width={28}
-                  label={{ value: 'FCM bpm', angle: 90, position: 'insideRight', style: { fontSize: 8, fill: '#9b8ec4' } }} />
-                <Line yAxisId="spo2" type="monotone" dataKey="SpO2" stroke="#6a9e8a"
-                  strokeWidth={1.2} dot={false} isAnimationActive={false} connectNulls={false} />
-                <Line yAxisId="hr" type="monotone" dataKey="FCM" stroke="#9b8ec4"
-                  strokeWidth={1.2} dot={false} isAnimationActive={false} connectNulls={false} />
-              </ComposedChart>
-            </div>
-          )}
-
-          {/* ── Presión Arterial ── */}
-          {bpPrintData.length > 0 && (
-            <div style={{ breakInside: 'avoid', marginBottom: 16 }}>
-              <p style={{ fontSize: 10, fontWeight: 600, color: '#5a6272', marginBottom: 4 }}>
-                Presión Arterial — sesión completa
-              </p>
-              <ComposedChart width={PRINT_W} height={100} data={bpPrintData}
-                margin={{ top: 4, right: 8, bottom: 4, left: 0 }}>
-                <CartesianGrid stroke="#e8e2d9" strokeWidth={0.5} />
-                <XAxis dataKey="t" type="number" scale="time"
-                  domain={[bpPrintData[0].t, bpPrintData[bpPrintData.length - 1].t]}
-                  tickFormatter={(t: number) => format(new Date(t), 'HH:mm')}
-                  tick={{ fontSize: 8 }} />
-                <YAxis domain={[40, 200]} tick={{ fontSize: 8 }} width={28}
-                  label={{ value: 'mmHg', angle: -90, position: 'insideLeft', style: { fontSize: 8, fill: '#c4848c' } }} />
-                <Line type="monotone" dataKey="Sis" stroke="#c4848c"
-                  strokeWidth={1.2} dot={false} isAnimationActive={false} connectNulls={false} />
-                <Line type="monotone" dataKey="Dia" stroke="#9b8ec4"
-                  strokeWidth={1.2} dot={false} isAnimationActive={false} connectNulls={false} />
-              </ComposedChart>
-            </div>
-          )}
-
-          {/* ── CTG segmentado (tira de papel) ── */}
-          {printSegments.length > 0 && (
-            <div style={{ breakBefore: (spo2PrintData.length > 0 || bpPrintData.length > 0) ? 'page' : 'auto' }}>
-              <p style={{ fontSize: 10, fontWeight: 600, color: '#5a6272', marginBottom: 6 }}>
-                Cardiotocografía (CTG) — {printSegments.length} segmentos de 5 min
-              </p>
-
-              {printSegments.map((seg, si) => {
-                const segTicks = Array.from({ length: 6 }, (_, i) => seg.t + i * 60_000)
-                  .filter(t => t <= seg.segEnd);
-                return (
-                  <div key={si} style={{ breakInside: 'avoid', marginBottom: 6 }}>
-                    {/* Etiqueta del segmento */}
-                    <div style={{ fontSize: 8, color: '#8e96a3', marginBottom: 1 }}>
-                      {format(new Date(seg.t), 'HH:mm:ss')} — {format(new Date(seg.segEnd), 'HH:mm:ss')}
-                    </div>
-
-                    {/* Panel FCF */}
-                    {seg.fhrSeg.length > 0 && (
-                      <ComposedChart width={PRINT_W} height={140} data={seg.fhrSeg}
-                        margin={{ top: 2, right: 8, bottom: 0, left: 0 }}>
-                        <CartesianGrid stroke="#e8e2d9" strokeWidth={0.5} />
-                        <XAxis dataKey="t" type="number" scale="time"
-                          domain={[seg.t, seg.segEnd]} ticks={segTicks}
-                          tickFormatter={(t: number) => format(new Date(t), 'HH:mm:ss')}
-                          tick={{ fontSize: 7 }} hide />
-                        <YAxis domain={[50, 210]}
-                          ticks={[60, 80, 100, 120, 140, 160, 180, 200]}
-                          tick={{ fontSize: 7 }} width={32}
-                          label={{ value: 'FCF bpm', angle: -90, position: 'insideLeft', style: { fontSize: 7, fill: '#E74C3C' } }} />
-                        {seg.btnSeg.flatMap((p, j) => [
-                          p.endMs != null ? <ReferenceArea key={`pfa-${si}-${j}`}
-                            x1={Math.max(p.startMs, seg.t)} x2={Math.min(p.endMs, seg.segEnd)}
-                            fill={BTN_COLOR} fillOpacity={0.2} /> : null,
-                          <ReferenceLine key={`pfs-${si}-${j}`} x={p.startMs}
-                            stroke={BTN_COLOR} strokeWidth={2}
-                            label={{ value: '▼', position: 'insideTopRight', style: { fontSize: 9, fill: BTN_COLOR } }} />,
-                          p.endMs != null ? <ReferenceLine key={`pfe-${si}-${j}`} x={p.endMs}
-                            stroke={BTN_COLOR} strokeWidth={1} strokeDasharray="4 2" /> : null,
-                        ])}
-                        {seg.evaSeg.flatMap((p, j) => [
-                          p.endMs != null ? <ReferenceArea key={`pea-${si}-${j}`}
-                            x1={Math.max(p.startMs, seg.t)} x2={Math.min(p.endMs, seg.segEnd)}
-                            fill={EVA_COLOR} fillOpacity={0.07} /> : null,
-                          <ReferenceLine key={`pes-${si}-${j}`} x={p.startMs}
-                            stroke={EVA_COLOR} strokeWidth={1} strokeDasharray="3 2" />,
-                          p.endMs != null ? <ReferenceLine key={`pee-${si}-${j}`} x={p.endMs}
-                            stroke={EVA_COLOR} strokeWidth={1} strokeDasharray="1 3" /> : null,
-                        ])}
-                        <Line type="monotone" dataKey="FCF" stroke="#E74C3C"
-                          strokeWidth={1.2} dot={false} isAnimationActive={false} connectNulls={false} />
-                      </ComposedChart>
-                    )}
-
-                    {/* Panel Toco */}
-                    {seg.tocoSeg.length > 0 && (
-                      <ComposedChart width={PRINT_W} height={90} data={seg.tocoSeg}
-                        margin={{ top: 0, right: 8, bottom: 4, left: 0 }}>
-                        <CartesianGrid stroke="#e8e2d9" strokeWidth={0.5} />
-                        <XAxis dataKey="t" type="number" scale="time"
-                          domain={[seg.t, seg.segEnd]} ticks={segTicks}
-                          tickFormatter={(t: number) => format(new Date(t), 'HH:mm:ss')}
-                          tick={{ fontSize: 7 }} />
-                        <YAxis tick={{ fontSize: 7 }} width={32}
-                          label={{ value: 'Toco', angle: -90, position: 'insideLeft', style: { fontSize: 7, fill: '#3498DB' } }} />
-                        {seg.btnSeg.flatMap((p, j) => [
-                          p.endMs != null ? <ReferenceArea key={`pta-${si}-${j}`}
-                            x1={Math.max(p.startMs, seg.t)} x2={Math.min(p.endMs, seg.segEnd)}
-                            fill={BTN_COLOR} fillOpacity={0.2} /> : null,
-                          <ReferenceLine key={`pts-${si}-${j}`} x={p.startMs}
-                            stroke={BTN_COLOR} strokeWidth={2} />,
-                          p.endMs != null ? <ReferenceLine key={`pte-${si}-${j}`} x={p.endMs}
-                            stroke={BTN_COLOR} strokeWidth={1} strokeDasharray="4 2" /> : null,
-                        ])}
-                        {seg.evaSeg.flatMap((p, j) => [
-                          p.endMs != null ? <ReferenceArea key={`ptea-${si}-${j}`}
-                            x1={Math.max(p.startMs, seg.t)} x2={Math.min(p.endMs, seg.segEnd)}
-                            fill={EVA_COLOR} fillOpacity={0.07} /> : null,
-                          <ReferenceLine key={`ptes-${si}-${j}`} x={p.startMs}
-                            stroke={EVA_COLOR} strokeWidth={1} strokeDasharray="3 2" />,
-                          p.endMs != null ? <ReferenceLine key={`ptee-${si}-${j}`} x={p.endMs}
-                            stroke={EVA_COLOR} strokeWidth={1} strokeDasharray="1 3" /> : null,
-                        ])}
-                        <Line type="monotone" dataKey="Toco" stroke="#3498DB"
-                          strokeWidth={1.2} dot={false} isAnimationActive={false} connectNulls={false} />
-                      </ComposedChart>
-                    )}
-                  </div>
-                );
-              })}
-
-              {/* Leyenda al pie del CTG */}
-              <div style={{ display: 'flex', gap: 16, marginTop: 6, fontSize: 8, color: '#8e96a3', breakInside: 'avoid' }}>
-                {btnPairs.length > 0 && (
-                  <span style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
-                    <span style={{ display: 'inline-block', width: 12, height: 2, background: BTN_COLOR }} />
-                    Botón materno
-                  </span>
-                )}
-                {evaPairs.length > 0 && (
-                  <span style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
-                    <span style={{ display: 'inline-block', width: 12, height: 0, borderTop: `1px dashed ${EVA_COLOR}` }} />
-                    Estimulación EVA
-                  </span>
-                )}
-              </div>
-            </div>
-          )}
-        </div>
-      )}
 
       {!isLoading && readings.length === 0 && (
         <div className="text-center py-8 text-[#8e96a3]">
