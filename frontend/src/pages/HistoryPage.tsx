@@ -90,15 +90,18 @@ const SessionDetail: React.FC<SessionDetailProps> = ({
   // ── CTG: todos los puntos de la sesión, para gráfico scrolleable ──────────
   const tocoR = readings.filter(r => r.sensor_type === SensorType.TOCODYNAMOMETER && r.contraction_intensity != null);
 
-  // Contar episodios de contracción (cruces de umbral con cooldown),
-  // igual que el backend — evita contar cada lectura individual como contracción
+  // Contar episodios de contracción usando umbral por percentiles:
+  // threshold = p50 + 0.4*(p85 - p50)  →  adapta al nivel real de la señal
+  // y no depende de si hay un pico extremo que eleve el 25% a un valor inalcanzable
   const contractionCount = (() => {
     if (tocoR.length === 0) return 0;
     const vals = tocoR.map(r => r.contraction_intensity as number);
-    const peak = Math.max(...vals);
-    const threshold = Math.max(5, peak * 0.25);
+    const sorted = [...vals].sort((a, b) => a - b);
+    const p50 = sorted[Math.floor(sorted.length * 0.50)];
+    const p85 = sorted[Math.floor(sorted.length * 0.85)];
+    const threshold = Math.max(8, p50 + (p85 - p50) * 0.4);
     let count = 0, inC = false, lastEndTs: number | null = null;
-    const COOLDOWN_MS = 15_000;
+    const COOLDOWN_MS = 8_000;
     for (const r of tocoR) {
       const v = r.contraction_intensity as number;
       const ts = new Date(r.timestamp).getTime();

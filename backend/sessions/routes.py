@@ -197,12 +197,14 @@ async def get_session_summary(
 
     contractions = 0
     if toco_rows:
-        vals = [r.contraction_intensity for r in toco_rows]
-        peak = max(vals)
-        threshold = max(5.0, peak * 0.25)   # 25% del pico, mínimo 5 unidades
+        vals = sorted(r.contraction_intensity for r in toco_rows)
+        n = len(vals)
+        p50 = vals[int(n * 0.50)]
+        p85 = vals[int(n * 0.85)]
+        threshold = max(8.0, p50 + (p85 - p50) * 0.4)
         in_c = False
         last_end_ts = None
-        COOLDOWN_S = 15
+        COOLDOWN_S = 8
         for row in toco_rows:
             v, ts = row.contraction_intensity, row.timestamp
             if not in_c and v > threshold:
@@ -210,7 +212,7 @@ async def get_session_summary(
                 if ok:
                     contractions += 1
                     in_c = True
-            elif in_c and v <= threshold * 0.5:   # histéresis al salir
+            elif in_c and v <= threshold * 0.5:
                 in_c = False
                 last_end_ts = ts
 
